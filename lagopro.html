@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAGO PRO | Ultimate Creative Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        :root {
+            --brand-primary: #8b5cf6;
+            --brand-secondary: #ec4899;
+            --bg-editor: #020617;
+            --sidebar-bg: rgba(15, 23, 42, 0.9);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-editor);
+            color: #f8fafc;
+            margin: 0;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .glass-ui {
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+        }
+
+        .tool-item {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .tool-item:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .tool-item.active {
+            background: var(--brand-primary);
+            color: white;
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+        }
+
+        #editor-container {
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 64px);
+            background-color: #0f172a; /* Default canvas color */
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        input[type="range"] { accent-color: var(--brand-primary); height: 4px; }
+        input[type="color"] {
+            -webkit-appearance: none; border: none; width: 32px; height: 32px;
+            border-radius: 8px; cursor: pointer; background: none; padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 8px; }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* 레이어 리스트 애니메이션 */
+        .layer-item { transition: background 0.2s; }
+        .layer-item.active { background: rgba(139, 92, 246, 0.15); border-left: 3px solid var(--brand-primary); }
+
+        /* 가이드 라인 스타일 */
+        #guide-x, #guide-y {
+            position: absolute;
+            background-color: #ec4899;
+            pointer-events: none;
+            display: none;
+            z-index: 10;
+        }
+        #guide-x { width: 1px; height: 100%; top: 0; }
+        #guide-y { height: 1px; width: 100%; left: 0; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+    </style>
+</head>
+<body class="antialiased select-none overflow-hidden">
+
+    <!-- Top Bar -->
+    <header class="h-16 border-b border-white/5 flex items-center justify-between px-6 glass-ui z-50">
+        <div class="flex items-center gap-6">
+            <div class="font-black text-2xl tracking-tighter text-white flex items-center gap-1.5">
+                LAGO <span class="gradient-text font-black tracking-tight">PRO</span>
+            </div>
+            <div class="h-6 w-px bg-white/10 mx-2"></div>
+            <div class="flex items-center gap-4 text-xs font-medium text-slate-400">
+                <button class="hover:text-white transition">Undo (Ctrl+Z)</button>
+                <button class="hover:text-white transition">Redo</button>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="hidden sm:block text-right mr-4">
+                <div class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Project Name</div>
+                <div class="text-sm text-slate-200 font-semibold">Workspace_01</div>
+            </div>
+            <button onclick="exportCanvas()" class="px-5 py-2 bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white text-sm font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-violet-900/40">
+                Export Image
+            </button>
+        </div>
+    </header>
+
+    <div class="flex h-[calc(100vh-64px)] overflow-hidden">
+        
+        <!-- Left Toolbar -->
+        <aside class="w-20 glass-ui border-l-0 border-y-0 flex flex-col items-center py-6 gap-5 z-40">
+            <button id="tool-select" class="tool-item active p-3 rounded-2xl" onclick="setTool('select')" title="Selection (V)">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"></path></svg>
+            </button>
+            <button id="tool-text" class="tool-item p-3 rounded-2xl" onclick="setTool('text')" title="Text (T)">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+            <button class="tool-item p-3 rounded-2xl text-pink-400" onclick="document.getElementById('img-upload').click()" title="이미지 삽입">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            </button>
+            <input type="file" id="img-upload" accept="image/*" class="hidden">
+        </aside>
+
+        <!-- Main Editor -->
+        <main id="editor-container" class="flex-1 overflow-hidden relative">
+            <div id="guide-x"></div>
+            <div id="guide-y"></div>
+            <canvas id="design-canvas"></canvas>
+            
+            <!-- Floating Indicator -->
+            <div id="status-indicator" class="absolute top-6 left-6 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-lg border border-white/10 text-[10px] font-mono text-slate-400 pointer-events-none">
+                POS: 0, 0 | SIZE: 0x0
+            </div>
+        </main>
+
+        <!-- Right Side Panel -->
+        <aside class="w-80 glass-ui border-r-0 border-y-0 flex flex-col z-40">
+            <!-- Properties Header -->
+            <div class="p-6 border-b border-white/5">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="font-bold text-white tracking-tight">속성 패널</h3>
+                    <div class="flex gap-1">
+                        <button id="btn-delete" onclick="deleteSelected()" class="p-2 hover:bg-red-500/10 hover:text-red-400 rounded-lg text-slate-500 transition hidden" title="Delete">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="layer-badge" class="inline-flex items-center px-2 py-1 rounded bg-white/5 text-[10px] text-slate-400 font-bold uppercase tracking-widest border border-white/10">
+                    Canvas Settings
+                </div>
+            </div>
+            
+            <div id="properties-panel" class="flex-1 overflow-y-auto p-6 space-y-8">
+                
+                <!-- Canvas Settings (Shown when nothing is selected) -->
+                <div id="panel-canvas" class="space-y-8">
+                    <section>
+                        <label class="text-[10px] font-black text-slate-500 mb-3 block uppercase tracking-widest">캔버스 배경색</label>
+                        <div class="flex items-center gap-4">
+                            <input type="color" id="canvas-bg-color" value="#0f172a" class="bg-white/5 border border-white/10">
+                            <input type="text" id="canvas-bg-hex" value="#0F172A" class="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 outline-none focus:border-violet-500">
+                        </div>
+                    </section>
+                    
+                    <section>
+                        <label class="text-[10px] font-black text-slate-500 mb-3 block uppercase tracking-widest">PRO 도형 라이브러리</label>
+                        <div class="grid grid-cols-3 gap-3">
+                            <button onclick="addShape('rect')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="사각형">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
+                            </button>
+                            <button onclick="addShape('circle')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="원형">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle></svg>
+                            </button>
+                            <button onclick="addShape('triangle')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="삼각형">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4l8 14H4l8-14z"></path></svg>
+                            </button>
+                            <button onclick="addShape('star')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="별">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                            </button>
+                            <button onclick="addShape('hexagon')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="육각형">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l8.66 5v10L12 22l-8.66-5V7L12 2z"></path></svg>
+                            </button>
+                            <button onclick="addShape('diamond')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="다이아몬드">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l9 10-9 10-9-10 9-10z"></path></svg>
+                            </button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Element Settings (Shown when an element is selected) -->
+                <div id="panel-element" class="hidden space-y-8">
+                    <!-- Text Editor -->
+                    <section id="prop-section-text" class="hidden">
+                        <label class="text-[10px] font-black text-violet-400 mb-3 block uppercase tracking-widest">텍스트 내용</label>
+                        <textarea id="prop-text-content" rows="2" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-violet-500 transition mb-3 font-medium"></textarea>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <span class="text-[10px] text-slate-500 block mb-1">Font Size</span>
+                                <input type="number" id="prop-font-size" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-violet-500">
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Appearance -->
+                    <section>
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">기본 색상 및 효과</label>
+                            <button onclick="applyMagicGradient()" class="text-[10px] bg-gradient-to-r from-violet-500 to-pink-500 text-white px-2 py-1 rounded font-bold hover:opacity-80 transition shadow-lg">✨ 매직 컬러</button>
+                        </div>
+                        <div class="flex items-center gap-4 mb-4">
+                            <input type="color" id="shape-color" class="bg-white/5 border border-white/10">
+                            <input type="text" id="color-hex" class="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 outline-none focus:border-violet-500">
+                        </div>
+                        <div class="mb-6">
+                            <span class="text-[10px] text-slate-500 block mb-1 font-bold uppercase tracking-widest">블렌드 모드 (Blend Mode)</span>
+                            <select id="prop-blend-mode" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-slate-300 outline-none focus:border-violet-500 cursor-pointer">
+                                <option value="source-over" class="bg-slate-900 text-white">Normal (기본)</option>
+                                <option value="multiply" class="bg-slate-900 text-white">Multiply (곱하기)</option>
+                                <option value="screen" class="bg-slate-900 text-white">Screen (스크린)</option>
+                                <option value="overlay" class="bg-slate-900 text-white">Overlay (오버레이)</option>
+                                <option value="color-dodge" class="bg-slate-900 text-white">Color Dodge (색상 다지)</option>
+                            </select>
+                        </div>
+                        
+                        <label class="text-[10px] font-black text-slate-500 mb-3 block uppercase tracking-widest mt-6">테두리 (Stroke)</label>
+                        <div class="flex items-center gap-4">
+                            <input type="color" id="prop-stroke-color" class="bg-white/5 border border-white/10">
+                            <div class="flex-1 flex items-center gap-2">
+                                <span class="text-xs text-slate-400">두께</span>
+                                <input type="number" id="prop-stroke-width" min="0" max="50" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-violet-500">
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Shadow (New Feature) -->
+                    <section>
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">그림자 효과 (Shadow)</label>
+                        </div>
+                        <div class="space-y-4 p-4 bg-white/5 border border-white/10 rounded-xl">
+                            <div class="flex items-center gap-4">
+                                <input type="color" id="prop-shadow-color" value="#000000" class="bg-black border border-white/10">
+                                <div class="flex-1">
+                                    <div class="flex justify-between text-[10px] text-slate-500 mb-1"><span>Blur</span><span id="shadow-blur-val">0px</span></div>
+                                    <input type="range" id="prop-shadow-blur" min="0" max="50" step="1" value="0" class="w-full">
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[10px] text-slate-500 mb-1"><span>거리 (Offset)</span><span id="shadow-offset-val">0px</span></div>
+                                <input type="range" id="prop-shadow-offset" min="-30" max="30" step="1" value="0" class="w-full">
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Transform -->
+                    <section>
+                        <label class="text-[10px] font-black text-slate-500 mb-3 block uppercase tracking-widest">형태 조절</label>
+                        <div class="space-y-5">
+                            <div>
+                                <div class="flex justify-between text-[10px] font-bold text-slate-500 mb-2"><span>불투명도</span><span id="opacity-val">100%</span></div>
+                                <input type="range" id="prop-opacity" min="0" max="1" step="0.01" value="1" class="w-full">
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[10px] font-bold text-slate-500 mb-2"><span>블러 필터 (자체 흐림)</span><span id="blur-val">0px</span></div>
+                                <input type="range" id="prop-blur" min="0" max="20" step="1" value="0" class="w-full">
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[10px] font-bold text-slate-500 mb-2"><span>회전 각도</span><span id="rotation-val">0°</span></div>
+                                <input type="range" id="prop-rotation" min="0" max="360" step="1" value="0" class="w-full">
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Layer Order -->
+                    <section>
+                        <label class="text-[10px] font-black text-slate-500 mb-3 block uppercase tracking-widest">레이어 순서</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="moveLayer('up')" class="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold transition text-slate-300 border border-white/5">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg> 앞으로
+                            </button>
+                            <button onclick="moveLayer('down')" class="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold transition text-slate-300 border border-white/5">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg> 뒤로
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- Layer List (Bottom Part of Sidebar) -->
+            <div class="h-64 border-t border-white/5 flex flex-col glass-ui">
+                <div class="px-6 py-4 flex justify-between items-center bg-white/5">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Layers</span>
+                    <span id="layer-count" class="text-[10px] font-bold text-violet-400">0</span>
+                </div>
+                <div id="layer-list" class="flex-1 overflow-y-auto py-2">
+                    <!-- Layer items injected here -->
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('design-canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('editor-container');
+        const guideX = document.getElementById('guide-x');
+        const guideY = document.getElementById('guide-y');
+        const statusInd = document.getElementById('status-indicator');
+
+        // Panels
+        const panelCanvas = document.getElementById('panel-canvas');
+        const panelElement = document.getElementById('panel-element');
+        const layerBadge = document.getElementById('layer-badge');
+        const btnDelete = document.getElementById('btn-delete');
+
+        // Canvas BG UI
+        const canvasBgColorInput = document.getElementById('canvas-bg-color');
+        const canvasBgHexInput = document.getElementById('canvas-bg-hex');
+
+        // Props UI
+        const colorPicker = document.getElementById('shape-color');
+        const colorHex = document.getElementById('color-hex');
+        const blendModeSelect = document.getElementById('prop-blend-mode');
+        const strokeColorInput = document.getElementById('prop-stroke-color');
+        const strokeWidthInput = document.getElementById('prop-stroke-width');
+        const opacityRange = document.getElementById('prop-opacity');
+        const blurRange = document.getElementById('prop-blur');
+        const rotationRange = document.getElementById('prop-rotation');
+        const textContent = document.getElementById('prop-text-content');
+        const fontSizeInput = document.getElementById('prop-font-size');
+        
+        // Shadow UI
+        const shadowColorInput = document.getElementById('prop-shadow-color');
+        const shadowBlurInput = document.getElementById('prop-shadow-blur');
+        const shadowOffsetInput = document.getElementById('prop-shadow-offset');
+
+        let shapes = [];
+        let selectedIdx = -1;
+        let isDragging = false, isResizing = false;
+        let dragOff = { x: 0, y: 0 }, resizeAnchor = null;
+        let currentTool = 'select';
+        let canvasBgColor = '#0f172a';
+
+        const SNAP_THRESHOLD = 5;
+
+        function init() {
+            resizeCanvas();
+            addShape('rect', '#8b5cf6');
+            draw();
+            setupKeyboard();
+        }
+
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            draw();
+        }
+
+        function setupKeyboard() {
+            window.addEventListener('keydown', (e) => {
+                if (selectedIdx === -1 || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+                
+                const s = shapes[selectedIdx];
+                const step = e.shiftKey ? 10 : 1;
+
+                switch(e.key) {
+                    case 'Delete': case 'Backspace': deleteSelected(); break;
+                    case 'ArrowUp': s.y -= step; break;
+                    case 'ArrowDown': s.y += step; break;
+                    case 'ArrowLeft': s.x -= step; break;
+                    case 'ArrowRight': s.x += step; break;
+                    case 'c': if(e.ctrlKey || e.metaKey) duplicateShape(); break;
+                }
+                draw();
+            });
+        }
+
+        function setTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.tool-item').forEach(b => b.classList.toggle('active', b.id === 'tool-'+tool));
+            canvas.style.cursor = tool === 'text' ? 'text' : 'default';
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 그리기 전 배경색 채우기 (내보내기를 위해)
+            ctx.fillStyle = canvasBgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            shapes.forEach((s, i) => {
+                ctx.save();
+                // 회전의 중심점을 모형의 중심으로 이동
+                ctx.translate(s.x + s.w/2, s.y + s.h/2);
+                ctx.rotate(s.rotation * Math.PI / 180);
+                
+                ctx.globalAlpha = s.opacity;
+                ctx.globalCompositeOperation = s.blendMode || 'source-over';
+                
+                // 그림자 설정
+                if (s.shadowBlur > 0 || Math.abs(s.shadowOffset) > 0) {
+                    ctx.shadowColor = s.shadowColor;
+                    ctx.shadowBlur = s.shadowBlur;
+                    ctx.shadowOffsetX = s.shadowOffset;
+                    ctx.shadowOffsetY = s.shadowOffset;
+                }
+
+                // 블러 필터 설정
+                if (s.blur > 0) {
+                    ctx.filter = `blur(${s.blur}px)`;
+                }
+                
+                if (s.isGradient && s.gradientColors) {
+                    const grad = ctx.createLinearGradient(-s.w/2, -s.h/2, s.w/2, s.h/2);
+                    grad.addColorStop(0, s.gradientColors[0]);
+                    grad.addColorStop(1, s.gradientColors[1]);
+                    ctx.fillStyle = grad;
+                } else {
+                    ctx.fillStyle = s.color;
+                }
+                
+                // 테두리(Stroke) 설정
+                if (s.strokeWidth > 0) {
+                    ctx.lineWidth = s.strokeWidth;
+                    ctx.strokeStyle = s.strokeColor;
+                }
+
+                ctx.beginPath();
+                
+                if (s.type === 'rect') ctx.roundRect(-s.w/2, -s.h/2, s.w, s.h, 12);
+                else if (s.type === 'circle') ctx.arc(0, 0, s.w/2, 0, Math.PI*2);
+                else if (s.type === 'star') drawStar(0, 0, 5, s.w/2, s.w/4);
+                else if (s.type === 'triangle') {
+                    ctx.moveTo(0, -s.h/2);
+                    ctx.lineTo(s.w/2, s.h/2);
+                    ctx.lineTo(-s.w/2, s.h/2);
+                }
+                else if (s.type === 'hexagon') drawPolygon(0, 0, 6, s.w/2);
+                else if (s.type === 'diamond') drawPolygon(0, 0, 4, s.w/2);
+                else if (s.type === 'image' && s.imageObj) {
+                    ctx.drawImage(s.imageObj, -s.w/2, -s.h/2, s.w, s.h);
+                }
+                else if (s.type === 'text') {
+                    ctx.font = `bold ${s.fontSize}px Inter`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(s.text, 0, 0);
+                    if (s.strokeWidth > 0) ctx.strokeText(s.text, 0, 0);
+                }
+                
+                if (s.type !== 'text' && s.type !== 'image') {
+                    ctx.fill();
+                    if (s.strokeWidth > 0) ctx.stroke();
+                }
+
+                ctx.restore();
+
+                // 선택 가이드라인은 회전이나 필터에 영향받지 않게 별도로 위쪽에 그림
+                if (i === selectedIdx) {
+                    ctx.save();
+                    ctx.translate(s.x + s.w/2, s.y + s.h/2);
+                    ctx.rotate(s.rotation * Math.PI / 180);
+                    
+                    ctx.setLineDash([6, 4]);
+                    ctx.strokeStyle = '#22d3ee'; // Cyan
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(-s.w/2 - 5, -s.h/2 - 5, s.w + 10, s.h + 10);
+                    
+                    // Anchors
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#fff';
+                    const as = 8;
+                    [[-s.w/2-9,-s.h/2-9],[s.w/2+1,-s.h/2-9],[-s.w/2-9,s.h/2+1],[s.w/2+1,s.h/2+1]].forEach(p => {
+                        ctx.beginPath();
+                        ctx.arc(p[0]+as/2, p[1]+as/2, as/2, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                    });
+                    ctx.restore();
+                }
+            });
+            updateLayerList();
+            updateStatus();
+        }
+
+        // 다각형 그리기 헬퍼 함수
+        function drawStar(cx, cy, spikes, outer, inner) {
+            let rot = Math.PI/2*3, step = Math.PI/spikes;
+            ctx.moveTo(cx, cy - outer);
+            for(let i=0; i<spikes; i++) {
+                ctx.lineTo(cx + Math.cos(rot)*outer, cy + Math.sin(rot)*outer); rot += step;
+                ctx.lineTo(cx + Math.cos(rot)*inner, cy + Math.sin(rot)*inner); rot += step;
+            }
+            ctx.closePath();
+        }
+
+        function drawPolygon(cx, cy, sides, radius) {
+            for (let i = 0; i < sides; i++) {
+                ctx.lineTo(cx + radius * Math.cos(i * 2 * Math.PI / sides),
+                           cy + radius * Math.sin(i * 2 * Math.PI / sides));
+            }
+            ctx.closePath();
+        }
+
+        function applyMagicGradient() {
+            if(selectedIdx === -1) return;
+            const colors = ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
+            const c1 = colors[Math.floor(Math.random() * colors.length)];
+            let c2 = colors[Math.floor(Math.random() * colors.length)];
+            while(c1 === c2) c2 = colors[Math.floor(Math.random() * colors.length)];
+            
+            shapes[selectedIdx].isGradient = true;
+            shapes[selectedIdx].gradientColors = [c1, c2];
+            draw();
+        }
+
+        document.getElementById('img-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const ratio = img.width / img.height;
+                    addShape('image');
+                    const s = shapes[shapes.length - 1];
+                    s.imageObj = img;
+                    s.w = 300; 
+                    s.h = 300 / ratio;
+                    s.color = 'transparent';
+                    draw();
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+            this.value = '';
+        });
+
+        function addShape(type, color = '#ec4899') {
+            const s = {
+                type, color, x: canvas.width/2 - 75, y: canvas.height/2 - 75,
+                w: 150, h: 150, opacity: 1, blur: 0, rotation: 0,
+                strokeWidth: 0, strokeColor: '#ffffff',
+                shadowColor: '#000000', shadowBlur: 0, shadowOffset: 0,
+                blendMode: 'source-over', isGradient: false, gradientColors: null, imageObj: null,
+                text: type === 'text' ? 'PRO Text' : '', fontSize: 40
+            };
+            shapes.push(s);
+            select(shapes.length - 1);
+            setTool('select');
+        }
+
+        function select(idx) {
+            selectedIdx = idx;
+            
+            if (idx === -1) {
+                // 아무것도 선택하지 않음 -> 캔버스 설정 표시
+                panelCanvas.classList.remove('hidden');
+                panelElement.classList.add('hidden');
+                layerBadge.innerText = 'Canvas Settings';
+                layerBadge.classList.remove('text-violet-400', 'bg-violet-500/20');
+                btnDelete.classList.add('hidden');
+            } else {
+                // 요소 선택됨 -> 요소 속성 표시
+                panelCanvas.classList.add('hidden');
+                panelElement.classList.remove('hidden');
+                btnDelete.classList.remove('hidden');
+                
+                const s = shapes[idx];
+                layerBadge.innerText = `${s.type} Element`;
+                layerBadge.classList.add('text-violet-400', 'bg-violet-500/20');
+                
+                // UI 값 동기화
+                colorPicker.value = s.color;
+                colorHex.value = s.color.toUpperCase();
+                strokeColorInput.value = s.strokeColor;
+                strokeWidthInput.value = s.strokeWidth;
+                if(blendModeSelect) blendModeSelect.value = s.blendMode || 'source-over';
+                
+                opacityRange.value = s.opacity;
+                document.getElementById('opacity-val').innerText = Math.round(s.opacity*100)+'%';
+                blurRange.value = s.blur;
+                document.getElementById('blur-val').innerText = s.blur+'px';
+                rotationRange.value = s.rotation;
+                document.getElementById('rotation-val').innerText = s.rotation+'°';
+                
+                shadowColorInput.value = s.shadowColor;
+                shadowBlurInput.value = s.shadowBlur;
+                document.getElementById('shadow-blur-val').innerText = s.shadowBlur+'px';
+                shadowOffsetInput.value = s.shadowOffset;
+                document.getElementById('shadow-offset-val').innerText = s.shadowOffset+'px';
+                
+                const isText = s.type === 'text';
+                document.getElementById('prop-section-text').classList.toggle('hidden', !isText);
+                if (isText) { textContent.value = s.text; fontSizeInput.value = s.fontSize; }
+            }
+            draw();
+        }
+
+        function deleteSelected() {
+            if(selectedIdx !== -1) {
+                shapes.splice(selectedIdx, 1);
+                select(-1);
+            }
+        }
+
+        function duplicateShape() {
+            const s = {...shapes[selectedIdx]};
+            s.x += 20; s.y += 20;
+            shapes.push(s);
+            select(shapes.length - 1);
+        }
+
+        function moveLayer(dir) {
+            if(selectedIdx === -1) return;
+            const to = dir === 'up' ? selectedIdx + 1 : selectedIdx - 1;
+            if(to >=0 && to < shapes.length) {
+                [shapes[selectedIdx], shapes[to]] = [shapes[to], shapes[selectedIdx]];
+                select(to);
+            }
+        }
+
+        function updateLayerList() {
+            const list = document.getElementById('layer-list');
+            list.innerHTML = '';
+            document.getElementById('layer-count').innerText = shapes.length;
+            
+            [...shapes].reverse().forEach((s, i) => {
+                const actualIdx = shapes.length - 1 - i;
+                const div = document.createElement('div');
+                div.className = `layer-item flex items-center justify-between px-6 py-3 cursor-pointer border-b border-white/5 hover:bg-white/5 ${actualIdx === selectedIdx ? 'active' : ''}`;
+                div.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 rounded-sm border border-white/20" style="background:${s.color}"></div>
+                        <span class="text-[11px] font-bold text-slate-300">${s.type.toUpperCase()}</span>
+                    </div>
+                    <svg class="w-3 h-3 text-slate-600" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path></svg>
+                `;
+                div.onclick = () => select(actualIdx);
+                list.appendChild(div);
+            });
+        }
+
+        function updateStatus() {
+            if(selectedIdx === -1) { statusInd.innerText = "LAGO PRO | READY"; return; }
+            const s = shapes[selectedIdx];
+            statusInd.innerText = `POS: ${Math.round(s.x)}, ${Math.round(s.y)} | SIZE: ${Math.round(s.w)}x${Math.round(s.h)}`;
+        }
+
+        // --- Export Image ---
+        function exportCanvas() {
+            // 현재 상태 그리기 (가이드라인 등을 제외하기 위해 선택 해제 후 그림)
+            const tempIdx = selectedIdx;
+            selectedIdx = -1; 
+            draw();
+            
+            const link = document.createElement('a');
+            link.download = 'LAGO_PRO_Design.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            
+            // 원래 상태 복구
+            selectedIdx = tempIdx;
+            draw();
+        }
+
+        // --- Interaction ---
+        canvas.addEventListener('mousedown', (e) => {
+            const r = canvas.getBoundingClientRect();
+            const mx = e.clientX - r.left, my = e.clientY - r.top;
+
+            if (currentTool === 'text') { addShape('text'); shapes[shapes.length-1].x = mx-75; shapes[shapes.length-1].y = my-25; return; }
+
+            if (selectedIdx !== -1) {
+                const s = shapes[selectedIdx];
+                // 회전된 상태에서의 조절점 클릭은 수식이 복잡해지므로 바운딩 박스 기준으로 간략화
+                const anchors = [['tl',s.x-10,s.y-10],['tr',s.x+s.w,s.y-10],['bl',s.x-10,s.y+s.h],['br',s.x+s.w,s.y+s.h]];
+                for(let [k,ax,ay] of anchors) {
+                    if(mx>=ax && mx<=ax+20 && my>=ay && my<=ay+20) { isResizing=true; resizeAnchor=k; return; }
+                }
+            }
+
+            for(let i=shapes.length-1; i>=0; i--) {
+                const s = shapes[i];
+                if(mx>=s.x && mx<=s.x+s.w && my>=s.y && my<=s.y+s.h) { select(i); isDragging=true; dragOff={x:mx-s.x, y:my-s.y}; return; }
+            }
+            select(-1);
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (selectedIdx === -1) return;
+            const r = canvas.getBoundingClientRect();
+            const mx = e.clientX - r.left, my = e.clientY - r.top;
+            const s = shapes[selectedIdx];
+
+            if (isResizing) {
+                if(resizeAnchor === 'br') { s.w = Math.max(20, mx-s.x); s.h = Math.max(20, my-s.y); }
+                else if(resizeAnchor === 'tl') { const ow=s.x+s.w, oh=s.y+s.h; s.x=Math.min(mx, ow-20); s.y=Math.min(my, oh-20); s.w=ow-s.x; s.h=oh-s.y; }
+                draw();
+            } else if (isDragging) {
+                let nx = mx - dragOff.x, ny = my - dragOff.y;
+                
+                // Smart Snap Logic
+                guideX.style.display = 'none'; guideY.style.display = 'none';
+                if(Math.abs(nx + s.w/2 - canvas.width/2) < SNAP_THRESHOLD) { nx = canvas.width/2 - s.w/2; guideX.style.display = 'block'; guideX.style.left = canvas.width/2+'px'; }
+                if(Math.abs(ny + s.h/2 - canvas.height/2) < SNAP_THRESHOLD) { ny = canvas.height/2 - s.h/2; guideY.style.display = 'block'; guideY.style.top = canvas.height/2+'px'; }
+                
+                s.x = nx; s.y = ny;
+                draw();
+            }
+        });
+
+        window.addEventListener('mouseup', () => { isDragging = isResizing = false; guideX.style.display = guideY.style.display = 'none'; });
+
+        // --- Bind Controls ---
+        const updateShapeProp = (key, val) => { if(selectedIdx !== -1) { shapes[selectedIdx][key] = val; draw(); } };
+
+        // Canvas BG
+        canvasBgColorInput.oninput = e => { canvasBgHexInput.value = e.target.value.toUpperCase(); canvasBgColor = e.target.value; container.style.backgroundColor = canvasBgColor; draw(); };
+        canvasBgHexInput.oninput = e => { if(/^#[0-9A-F]{6}$/i.test(e.target.value)) { canvasBgColorInput.value = e.target.value; canvasBgColor = e.target.value; container.style.backgroundColor = canvasBgColor; draw(); } };
+
+        // Element Props
+        colorPicker.oninput = e => { colorHex.value = e.target.value.toUpperCase(); updateShapeProp('isGradient', false); updateShapeProp('color', e.target.value); };
+        colorHex.oninput = e => { if(/^#[0-9A-F]{6}$/i.test(e.target.value)) { colorPicker.value = e.target.value; updateShapeProp('isGradient', false); updateShapeProp('color', e.target.value); } };
+        if(blendModeSelect) blendModeSelect.onchange = e => updateShapeProp('blendMode', e.target.value);
+        strokeColorInput.oninput = e => updateShapeProp('strokeColor', e.target.value);
+        strokeWidthInput.oninput = e => updateShapeProp('strokeWidth', parseInt(e.target.value)||0);
+        
+        opacityRange.oninput = e => { document.getElementById('opacity-val').innerText = Math.round(e.target.value*100)+'%'; updateShapeProp('opacity', parseFloat(e.target.value)); };
+        blurRange.oninput = e => { document.getElementById('blur-val').innerText = e.target.value+'px'; updateShapeProp('blur', parseInt(e.target.value)); };
+        rotationRange.oninput = e => { document.getElementById('rotation-val').innerText = e.target.value+'°'; updateShapeProp('rotation', parseInt(e.target.value)); };
+        
+        shadowColorInput.oninput = e => updateShapeProp('shadowColor', e.target.value);
+        shadowBlurInput.oninput = e => { document.getElementById('shadow-blur-val').innerText = e.target.value+'px'; updateShapeProp('shadowBlur', parseInt(e.target.value)); };
+        shadowOffsetInput.oninput = e => { document.getElementById('shadow-offset-val').innerText = e.target.value+'px'; updateShapeProp('shadowOffset', parseInt(e.target.value)); };
+
+        textContent.oninput = e => updateShapeProp('text', e.target.value);
+        fontSizeInput.oninput = e => updateShapeProp('fontSize', parseInt(e.target.value)||20);
+
+        window.onresize = resizeCanvas;
+        window.onload = init;
+    </script>
+</body>
+</html>
