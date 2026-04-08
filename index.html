@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAGO PRO | Ultimate Creative Editor</title>
+    
+    <!-- Firebase SDK 연동 -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        /* 폰트 설정 (로그인은 Pretendard, 에디터는 Inter 혼용) */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        
+        /* --- 로그인 UI 변수 및 스타일 (LAGO PRO 테마로 통일) --- */
+        :root {
+            /* LAGO PRO 원본 변수 */
+            --brand-primary: #8b5cf6;
+            --brand-secondary: #ec4899;
+            --bg-editor: #020617;
+            --sidebar-bg: rgba(15, 23, 42, 0.9);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-editor);
+            color: #f8fafc;
+            margin: 0;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* --- 로그인 화면 전용 스타일 --- */
+        .auth-section { 
+            display: flex; height: 100vh; width: 100vw; flex-direction: column; justify-content: center; align-items: center; 
+            padding: 20px; font-family: 'Inter', 'Pretendard', sans-serif; 
+            position: absolute; top: 0; left: 0; z-index: 10000; 
+            opacity: 0; visibility: hidden; transform: translateY(-10px); transition: all 0.5s ease-in-out;
+            background-color: var(--bg-editor); 
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .auth-section.active { opacity: 1; visibility: visible; transform: translateY(0); }
+        
+        .auth-card { 
+            background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            padding: 40px 30px; border-radius: 24px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); 
+            width: 100%; max-width: 420px; text-align: center; border: 1px solid var(--glass-border); 
+            color: #f8fafc;
+        }
+        
+        .auth-input-group { text-align: left; margin-bottom: 20px; width: 100%; }
+        .auth-select-label { font-size: 11px; color: #94a3b8; font-weight: 800; margin-bottom: 8px; display: block; padding-left: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .auth-select-box, .auth-custom-input { 
+            width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); 
+            font-size: 15px; outline: none; background: rgba(255,255,255,0.03); color: #f8fafc; transition: all 0.2s;
+        }
+        .auth-select-box { cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+        .auth-select-box:hover, .auth-custom-input:focus { border-color: var(--brand-primary); background: rgba(255,255,255,0.08); }
+        .auth-custom-input::placeholder { color: #64748b; }
+        
+        .auth-action-btn { 
+            padding: 16px; border-radius: 12px; border: none; 
+            background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary)); 
+            color: #fff; font-weight: 800; cursor: pointer; width: 100%; font-size: 16px; 
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3); transition: transform 0.2s, filter 0.2s; 
+        }
+        .auth-action-btn:hover { filter: brightness(1.1); }
+        .auth-action-btn:active { transform: scale(0.98); }
+        
+        .auth-modal-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); 
+            display: none; justify-content: center; align-items: center; z-index: 20000; backdrop-filter: blur(8px); 
+        }
+        .auth-modal-overlay.active { display: flex; }
+        .auth-modal-content { 
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(24px); border: 1px solid var(--glass-border);
+            border-radius: 24px; padding: 30px; width: 92%; max-width: 400px; 
+            max-height: 85vh; overflow-y: auto; position: relative; color: #f8fafc;
+        }
+        
+        .auth-name-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 15px; }
+        .auth-name-btn { 
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.05); padding: 14px 2px; border-radius: 12px; font-size: 14px; 
+            font-weight: 700; color: #cbd5e1; cursor: pointer; text-align: center; transition: all 0.2s;
+        }
+        .auth-name-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .auth-name-btn:active, .auth-name-btn.selected { background: var(--brand-primary); color: white; border-color: var(--brand-primary); }
+        .auth-admin-btn { grid-column: span 4; background: rgba(0,0,0,0.2); color: #94a3b8; font-size: 13px; padding: 12px; margin-top: 5px; }
+        
+        .auth-sub-btn { 
+            padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #cbd5e1; 
+            font-weight: 700; cursor: pointer; font-size: 15px; width: 100%; margin-top: 15px; transition: all 0.2s;
+        }
+        .auth-sub-btn:hover { background: rgba(255,255,255,0.1); }
+        .auth-sub-btn:active { transform: scale(0.98); }
+
+        /* --- LAGO PRO 원본 스타일 --- */
+        .glass-ui {
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+        }
+
+        .tool-item { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .tool-item:hover:not(.active) { background: rgba(255, 255, 255, 0.05); }
+        .tool-item.active { background: var(--brand-primary); color: white; box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+
+        #editor-container {
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 64px);
+            background-color: #0f172a; 
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        input[type="range"] { accent-color: var(--brand-primary); height: 4px; }
+        input[type="color"] { -webkit-appearance: none; border: none; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; background: none; padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 8px; }
+
+        .gradient-text { background: linear-gradient(135deg, #a78bfa, #f472b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        .layer-item { transition: background 0.2s; }
+        .layer-item.active { background: rgba(139, 92, 246, 0.15); border-left: 3px solid var(--brand-primary); }
+
+        #guide-x, #guide-y { position: absolute; background-color: #ec4899; pointer-events: none; display: none; z-index: 10; }
+        #guide-x { width: 1px; height: 100%; top: 0; }
+        #guide-y { height: 1px; width: 100%; left: 0; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+        /* --- LAGO PRO 앱 화면 전환 애니메이션 --- */
+        #lago-app {
+            display: flex; flex-direction: column; height: 100vh; width: 100vw;
+            position: absolute; top: 0; left: 0; background-color: var(--bg-editor);
+            opacity: 0; visibility: hidden; transform: scale(0.98); transition: all 0.5s ease-in-out; z-index: 1;
+        }
+        #lago-app.active {
+            opacity: 1; visibility: visible; transform: scale(1);
+        }
+    </style>
+</head>
+<body class="antialiased select-none overflow-hidden">
+
+    <!-- ========================================== -->
+    <!-- [1] 로그인 섹션 (v8.html 기반) -->
+    <!-- ========================================== -->
+    <div id="login-section" class="auth-section active">
+        <div class="auth-card">
+            <div class="font-black text-3xl tracking-tighter text-white flex items-center justify-center gap-1.5 mb-2">
+                LAGO <span class="gradient-text font-black tracking-tight">PRO</span> 🔒
+            </div>
+            <p style="font-size: 13px; color: #94a3b8; margin-bottom: 30px; font-weight: 500;">멤버십 인증 후 프로 에디터를 사용하세요.</p>
+            
+            <div class="auth-input-group">
+                <span class="auth-select-label">누구신가요?</span>
+                <div class="auth-select-box" onclick="openNameModal()">
+                    <span id="login-name-text" style="color: #64748b;">목록에서 선택</span>
+                    <span style="font-size:12px; color: #64748b;">▼</span>
+                </div>
+            </div>
+            <div class="auth-input-group">
+                <span class="auth-select-label">접속번호 (비밀번호)</span>
+                <input type="password" id="loginPw" class="auth-custom-input" placeholder="비밀번호 4자리" onkeypress="if(event.keyCode==13) handleLogin()">
+            </div>
+            <button class="auth-action-btn" onclick="handleLogin()" style="margin-top: 10px;">PRO 에디터 접속</button>
+            
+            <!-- 퍼플톡 연동 공지 -->
+            <div style="margin-top: 25px; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 12px; text-align: left; font-size: 12px; color: #94a3b8; line-height: 1.6; border: 1px solid rgba(255,255,255,0.05);">
+                <span style="font-weight: 800; color: #a78bfa; display: block; margin-bottom: 5px;">✨ 퍼플톡 통합 연동 안내</span>
+                로그인 데이터 및 멤버십 권한은 <strong style="color: #f8fafc;">퍼플톡</strong>과 연동됩니다.<br>
+                비밀번호 변경 및 관리자의 권한 관리는 퍼플톡에서 진행해 주세요.<br>
+                <a href="https://ramalok3846.github.io/class-chat-6-7/" target="_blank" style="color: #f472b6; font-weight: 700; text-decoration: none; display: inline-block; margin-top: 8px; transition: color 0.2s;" onmouseover="this.style.color='#ec4899'" onmouseout="this.style.color='#f472b6'">퍼플톡 이동하기 ➔</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 이름 선택 모달 -->
+    <div id="name-modal" class="auth-modal-overlay" onclick="closeAuthModal('name-modal')">
+        <div class="auth-modal-content" onclick="event.stopPropagation()">
+            <h3 style="text-align:center; margin-bottom:15px; font-weight: 800; font-size: 20px; color: #f8fafc;">이름 선택</h3>
+            <div id="name-grid" class="auth-name-grid"></div>
+            <div id="admin-login-area" style="margin-top:10px; display: flex; justify-content: center;"></div>
+            <button class="auth-sub-btn" onclick="closeAuthModal('name-modal')">닫기</button>
+        </div>
+    </div>
+
+    <!-- 알림 모달 -->
+    <div id="alert-modal" class="auth-modal-overlay" onclick="closeAuthModal('alert-modal')">
+        <div class="auth-modal-content" style="text-align:center;" onclick="event.stopPropagation()">
+            <h3 id="alert-title" style="margin-bottom:15px; margin-top:0; font-weight: 800; font-size: 20px;">안내</h3>
+            <p id="alert-msg" style="color:#cbd5e1; font-size:15px; line-height:1.6; margin-bottom:25px; word-break:keep-all; font-weight: 500;"></p>
+            <button class="auth-action-btn" onclick="closeAuthModal('alert-modal')">확인</button>
+        </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- [2] LAGO PRO 에디터 (로그인 성공 시 표시됨) -->
+    <!-- ========================================== -->
+    <div id="lago-app">
+        <!-- Top Bar -->
+        <header class="h-16 border-b border-white/5 flex items-center justify-between px-6 glass-ui z-50">
+            <div class="flex items-center gap-6">
+                <div class="font-black text-2xl tracking-tighter text-white flex items-center gap-1.5">
+                    LAGO <span class="gradient-text font-black tracking-tight">PRO</span>
+                </div>
+                <div class="h-6 w-px bg-white/10 mx-2"></div>
+                <div class="flex items-center gap-4 text-xs font-medium text-slate-400">
+                    <button class="hover:text-white transition">Undo (Ctrl+Z)</button>
+                    <button class="hover:text-white transition">Redo</button>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="hidden sm:block text-right mr-4">
+                    <div class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">사용자</div>
+                    <div id="editor-username" class="text-sm text-slate-200 font-semibold">User</div>
+                </div>
+                <button onclick="exportCanvas()" class="px-5 py-2 bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 text-white text-sm font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-violet-900/40">
+                    Export Image
+                </button>
+                <button onclick="handleLogout()" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-xl transition-all active:scale-95 border border-white/10 ml-1">
+                    로그아웃
+                </button>
+            </div>
+        </header>
+
+        <div class="flex h-[calc(100vh-64px)] overflow-hidden">
+            
+            <!-- Left Toolbar -->
+            <aside class="w-20 glass-ui border-l-0 border-y-0 flex flex-col items-center py-6 gap-5 z-40">
+                <button id="tool-select" class="tool-item active p-3 rounded-2xl" onclick="setTool('select')" title="Selection (V)">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"></path></svg>
+                </button>
+                <button id="tool-text" class="tool-item p-3 rounded-2xl" onclick="setTool('text')" title="Text (T)">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                </button>
+                <button class="tool-item p-3 rounded-2xl text-pink-400" onclick="document.getElementById('img-upload').click()" title="이미지 삽입">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                </button>
+                <input type="file" id="img-upload" accept="image/*" class="hidden">
+            </aside>
+
+            <!-- Main Editor -->
+            <main id="editor-container" class="flex-1 overflow-hidden relative">
+                <div id="guide-x"></div>
+                <div id="guide-y"></div>
+                <canvas id="design-canvas"></canvas>
+                
+                <!-- Floating Indicator -->
+                <div id="status-indicator" class="absolute top-6 left-6 px-3 py-1.5 bg-black/40 backdrop-blur-md rounded-lg border border-white/10 text-[10px] font-mono text-slate-400 pointer-events-none">
+                    POS: 0, 0 | SIZE: 0x0
+                </div>
+            </main>
+
+            <!-- Right Side Panel -->
+            <aside class="w-80 glass-ui border-r-0 border-y-0 flex flex-col z-40">
+                <!-- Properties Header -->
+                <div class="p-6 border-b border-white/5">
+                    <div class="flex justify-between items-start mb-4">
+                        <h3 class="font-bold text-white tracking-tight">속성 패널</h3>
+                        <div class="flex gap-1">
+                            <button id="btn-delete" onclick="deleteSelected()" class="p-2 hover:bg-red-500/10 hover:text-red-400 rounded-lg text-slate-500 transition hidden" title="Delete">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="layer-badge" class="inline-flex items-center px-2 py-1 rounded bg-white/5 text-[10px] text-slate-400 font-bold uppercase tracking-widest border border-white/10">
+                        Canvas Settings
+                    </div>
+                </div>
+                
+                <div id="properties-panel" class="flex-1 overflow-y-auto p-6 space-y-8">
+                    
+                    <!-- Canvas Settings -->
+                    <div id="panel-canvas" class="space-y-8">
+                        <section>
+                            <label class="text-[10px] font-black text-slate-500 mb-3 block uppercase tracking-widest">캔버스 배경색</label>
+                            <div class="flex items-center gap-4">
+                                <input type="color" id="canvas-bg-color" value="#0f172a" class="bg-white/5 border border-white/10">
+                                <input type="text" id="canvas-bg-hex" value="#0F172A" class="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 outline-none focus:border-violet-500">
+                            </div>
+                        </section>
+                        
+                        <section>
+                            <label class="text-[10px] font-black text-slate-500 mb-3 block uppercase tracking-widest">PRO 도형 라이브러리</label>
+                            <div class="grid grid-cols-3 gap-3">
+                                <button onclick="addShape('rect')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="사각형">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
+                                </button>
+                                <button onclick="addShape('circle')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="원형">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle></svg>
+                                </button>
+                                <button onclick="addShape('triangle')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="삼각형">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4l8 14H4l8-14z"></path></svg>
+                                </button>
+                                <button onclick="addShape('star')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="별">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                                </button>
+                                <button onclick="addShape('hexagon')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="육각형">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l8.66 5v10L12 22l-8.66-5V7L12 2z"></path></svg>
+                                </button>
+                                <button onclick="addShape('diamond')" class="aspect-square bg-white/5 border border-white/10 rounded-xl flex items-center justify-center hover:border-violet-500 hover:text-violet-400 transition text-slate-400" title="다이아몬드">
+                                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l9 10-9 10-9-10 9-10z"></path></svg>
+                                </button>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- Element Settings -->
+                    <div id="panel-element" class="hidden space-y-8">
+                        <section id="prop-section-text" class="hidden">
+                            <label class="text-[10px] font-black text-violet-400 mb-3 block uppercase tracking-widest">텍스트 내용</label>
+                            <textarea id="prop-text-content" rows="2" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-violet-500 transition mb-3 font-medium"></textarea>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <span class="text-[10px] text-slate-500 block mb-1">Font Size</span>
+                                    <input type="number" id="prop-font-size" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-violet-500">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section>
+                            <div class="flex items-center justify-between mb-3">
+                                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">기본 색상 및 효과</label>
+                                <button onclick="applyMagicGradient()" class="text-[10px] bg-gradient-to-r from-violet-500 to-pink-500 text-white px-2 py-1 rounded font-bold hover:opacity-80 transition shadow-lg">✨ 매직 컬러</button>
+                            </div>
+                            <div class="flex items-center gap-4 mb-4">
+                                <input type="color" id="shape-color" class="bg-white/5 border border-white/10">
+                                <input type="text" id="color-hex" class="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 outline-none focus:border-violet-500">
+                            </div>
+                            <div class="mb-6">
+                                <span class="text-[10px] text-slate-500 block mb-1 font-bold uppercase tracking-widest">블렌드 모드 (Blend Mode)</span>
+                                <select id="prop-blend-mode" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-slate-300 outline-none focus:border-violet-500 cursor-pointer">
+                                    <option value="source-over" class="bg-slate-900 text-white">Normal (기본)</option>
+                                    <option value="multiply" class="bg-slate-900 text-white">Multiply (곱하기)</option>
+                                    <option value="screen" class="bg-slate-900 text-white">Screen (스크린)</option>
+                                    <option value="overlay" class="bg-slate-900 text-white">Overlay (오버레이)</option>
+                                    <option value="color-dodge" class="bg-slate-900 text-white">Color Dodge (색상 다지)</option>
+                                </select>
+                            </div>
+                            
+                            <label class="text-[10px] font-black text-slate-500 mb-3 block uppercase tracking-widest mt-6">테두리 (Stroke)</label>
+                            <div class="flex items-center gap-4">
+                                <input type="color" id="prop-stroke-color" class="bg-white/5 border border-white/10">
+                                <div class="flex-1 flex items-center gap-2">
+                                    <span class="text-xs text-slate-400">두께</span>
+                                    <input type="number" id="prop-stroke-width" min="0" max="50" class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white outline-none focus:border-violet-500">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section>
+                            <div class="flex items-center justify-between mb-3">
+                                <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest">그림자 효과 (Shadow)</label>
+                            </div>
+                            <div class="space-y-4 p-4 bg-white/5 border border-white/10 rounded-xl">
+                                <div class="flex items-center gap-4">
+                                    <input type="color" id="prop-shadow-color" value="#000000" class="bg-black border border-white/10">
+                                    <div class="flex-1">
+                                        <div class="flex justify-between text-[10px] text-slate-500 mb-1"><span>Blur</span><span id="shadow-blur-val">0px</span></div>
+                                        <input type="range" id="prop-shadow-blur" min="0" max="50" step="1" value="0" class="w-full">
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[10px] text-slate-500 mb-1"><span>거리 (Offset)</span><span id="shadow-offset-val">0px</span></div>
+                                    <input type="range" id="prop-shadow-offset" min="-30" max="30" step="1" value="0" class="w-full">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section>
+                            <label class="text-[10px] font-black text-slate-500 mb-3 block uppercase tracking-widest">형태 조절</label>
+                            <div class="space-y-5">
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-slate-500 mb-2"><span>불투명도</span><span id="opacity-val">100%</span></div>
+                                    <input type="range" id="prop-opacity" min="0" max="1" step="0.01" value="1" class="w-full">
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-slate-500 mb-2"><span>블러 필터 (자체 흐림)</span><span id="blur-val">0px</span></div>
+                                    <input type="range" id="prop-blur" min="0" max="20" step="1" value="0" class="w-full">
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[10px] font-bold text-slate-500 mb-2"><span>회전 각도</span><span id="rotation-val">0°</span></div>
+                                    <input type="range" id="prop-rotation" min="0" max="360" step="1" value="0" class="w-full">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section>
+                            <label class="text-[10px] font-black text-slate-500 mb-3 block uppercase tracking-widest">레이어 순서</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="moveLayer('up')" class="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold transition text-slate-300 border border-white/5">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg> 앞으로
+                                </button>
+                                <button onclick="moveLayer('down')" class="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold transition text-slate-300 border border-white/5">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg> 뒤로
+                                </button>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- Layer List -->
+                <div class="h-64 border-t border-white/5 flex flex-col glass-ui">
+                    <div class="px-6 py-4 flex justify-between items-center bg-white/5">
+                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Layers</span>
+                        <span id="layer-count" class="text-[10px] font-bold text-violet-400">0</span>
+                    </div>
+                    <div id="layer-list" class="flex-1 overflow-y-auto py-2">
+                        <!-- Layer items injected here -->
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 스크립트 처리 -->
+    <!-- ========================================== -->
+    <script>
+        // --- 1. 로그인 시스템 및 Firebase 연동 ---
+        const firebaseConfig = { 
+            databaseURL: "https://class-chat-6-7-default-rtdb.asia-southeast1.firebasedatabase.app/" 
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        const students = {
+            "강유주":"6701", "고윤서":"6702", "공윤호":"6703", "김성민":"6704",
+            "김태윤":"6705", "나현웅":"6706", "류찬혁":"6707", "문예린":"6708",
+            "박소율":"6709", "박채윤":"6710", "배예람":"6711", "백한율":"6712",
+            "우은서":"6713", "우진서":"6714", "윤소영":"6715", "임소윤":"6716",
+            "임수현":"6717", "정시후":"6718", "조수빈":"6719", "최리한":"6720",
+            "최은수":"6721", "최준성":"6722", "하예준":"6723", "허단":"6724"
+        };
+        
+        let selLoginName = "";
+
+        // 이름 선택 모달 오픈
+        function openNameModal() {
+            const grid = document.getElementById('name-grid'); 
+            grid.innerHTML = "";
+            Object.keys(students).forEach(name => {
+                const btn = document.createElement('button');
+                btn.className = "auth-name-btn"; 
+                btn.innerText = name;
+                btn.onclick = () => {
+                    selLoginName = name; 
+                    document.getElementById('login-name-text').innerText = name;
+                    document.getElementById('login-name-text').style.color = "#f8fafc";
+                    closeAuthModal('name-modal');
+                };
+                grid.appendChild(btn);
+            });
+            
+            // 관리자 버튼 추가
+            const adminArea = document.getElementById('admin-login-area');
+            adminArea.innerHTML = "";
+            const adminBtn = document.createElement('button');
+            adminBtn.className = "auth-name-btn auth-admin-btn"; 
+            adminBtn.innerText = "관리자 계정";
+            adminBtn.onclick = () => { 
+                selLoginName = "관리자"; 
+                document.getElementById('login-name-text').innerText = "관리자"; 
+                document.getElementById('login-name-text').style.color = "#f8fafc";
+                closeAuthModal('name-modal'); 
+            };
+            adminArea.appendChild(adminBtn);
+
+            document.getElementById('name-modal').classList.add('active');
+        }
+
+        function closeAuthModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        function showAuthAlert(title, msgHtml, isDanger = true) {
+            const titleEl = document.getElementById('alert-title');
+            titleEl.innerHTML = title;
+            titleEl.style.color = isDanger ? "#ef4444" : "#a78bfa";
+            document.getElementById('alert-msg').innerHTML = msgHtml;
+            document.getElementById('alert-modal').classList.add('active');
+        }
+
+        // 로그인 처리 로직
+        async function handleLogin() {
+            if(!selLoginName) return showAuthAlert("접속 오류", "목록에서 이름을 먼저 선택해주세요.");
+            const pwInput = document.getElementById('loginPw').value;
+            
+            try {
+                // Firebase DB 조회
+                const snap = await db.ref('profiles/' + selLoginName).once('value');
+                const data = snap.val();
+                
+                // 비밀번호 확인 로직
+                let finalPw = (selLoginName === '관리자') ? ((data && data.pw) ? data.pw : '1234') : ((data && data.pw) ? data.pw : students[selLoginName]);
+                
+                if(pwInput !== finalPw) { 
+                    return showAuthAlert("인증 실패", "비밀번호가 일치하지 않습니다."); 
+                }
+
+                // 멤버십 확인 로직 (관리자는 무조건 통과)
+                if (selLoginName !== '관리자' && (!data || data.membership !== true)) {
+                    return showAuthAlert(
+                        "접속 제한 🚫", 
+                        "현재 계정은 PRO 멤버십 권한이 없어 LAGO PRO에 접속할 수 없습니다.<br><br>일반 버전 LAGO를 이용해주세요.<br><br><a href='https://ramalok3846.github.io/LAGO/' target='_blank' style='display:inline-block; margin-top:10px; background:rgba(255,255,255,0.1); padding:12px 24px; border-radius:12px; color:#f8fafc; border:1px solid rgba(255,255,255,0.2); font-weight:800; text-decoration:none; transition:0.2s;' onmouseover=\"this.style.background='rgba(255,255,255,0.2)'\" onmouseout=\"this.style.background='rgba(255,255,255,0.1)'\">일반 LAGO 접속하기 ➔</a>",
+                        true
+                    );
+                }
+
+                // 로그인 성공!
+                document.getElementById('editor-username').innerText = selLoginName + (selLoginName === '관리자' ? ' (ADMIN)' : ' (PRO)');
+                document.getElementById('login-section').classList.remove('active');
+                document.getElementById('lago-app').classList.add('active');
+                
+                // LAGO PRO 에디터 초기화
+                setTimeout(initLago, 400); // 부드러운 애니메이션 전환 대기 후 캔버스 리사이징 적용
+
+            } catch(err) {
+                console.error(err);
+                showAuthAlert("통신 오류", "데이터베이스 연결에 실패했습니다.");
+            }
+        }
+
+        // 로그아웃 처리 (부드러운 애니메이션 전환)
+        function handleLogout() {
+            // 에디터 화면 숨기고 로그인 화면 표시
+            document.getElementById('lago-app').classList.remove('active');
+            document.getElementById('login-section').classList.add('active');
+            
+            // 폼 초기화
+            document.getElementById('loginPw').value = '';
+            selLoginName = '';
+            document.getElementById('login-name-text').innerText = '목록에서 선택';
+            document.getElementById('login-name-text').style.color = '#64748b';
+        }
+
+
+        // --- 2. LAGO PRO 에디터 스크립트 ---
+        const canvas = document.getElementById('design-canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('editor-container');
+        const guideX = document.getElementById('guide-x');
+        const guideY = document.getElementById('guide-y');
+        const statusInd = document.getElementById('status-indicator');
+
+        // Panels
+        const panelCanvas = document.getElementById('panel-canvas');
+        const panelElement = document.getElementById('panel-element');
+        const layerBadge = document.getElementById('layer-badge');
+        const btnDelete = document.getElementById('btn-delete');
+
+        // Canvas BG UI
+        const canvasBgColorInput = document.getElementById('canvas-bg-color');
+        const canvasBgHexInput = document.getElementById('canvas-bg-hex');
+
+        // Props UI
+        const colorPicker = document.getElementById('shape-color');
+        const colorHex = document.getElementById('color-hex');
+        const blendModeSelect = document.getElementById('prop-blend-mode');
+        const strokeColorInput = document.getElementById('prop-stroke-color');
+        const strokeWidthInput = document.getElementById('prop-stroke-width');
+        const opacityRange = document.getElementById('prop-opacity');
+        const blurRange = document.getElementById('prop-blur');
+        const rotationRange = document.getElementById('prop-rotation');
+        const textContent = document.getElementById('prop-text-content');
+        const fontSizeInput = document.getElementById('prop-font-size');
+        
+        // Shadow UI
+        const shadowColorInput = document.getElementById('prop-shadow-color');
+        const shadowBlurInput = document.getElementById('prop-shadow-blur');
+        const shadowOffsetInput = document.getElementById('prop-shadow-offset');
+
+        let shapes = [];
+        let selectedIdx = -1;
+        let isDragging = false, isResizing = false;
+        let dragOff = { x: 0, y: 0 }, resizeAnchor = null;
+        let currentTool = 'select';
+        let canvasBgColor = '#0f172a';
+
+        const SNAP_THRESHOLD = 5;
+
+        // 로그인 성공 시 호출됨
+        function initLago() {
+            resizeCanvas();
+            addShape('rect', '#8b5cf6');
+            draw();
+            setupKeyboard();
+            window.addEventListener('resize', resizeCanvas);
+        }
+
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            draw();
+        }
+
+        function setupKeyboard() {
+            window.addEventListener('keydown', (e) => {
+                if (selectedIdx === -1 || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+                
+                const s = shapes[selectedIdx];
+                const step = e.shiftKey ? 10 : 1;
+
+                switch(e.key) {
+                    case 'Delete': case 'Backspace': deleteSelected(); break;
+                    case 'ArrowUp': s.y -= step; break;
+                    case 'ArrowDown': s.y += step; break;
+                    case 'ArrowLeft': s.x -= step; break;
+                    case 'ArrowRight': s.x += step; break;
+                    case 'c': if(e.ctrlKey || e.metaKey) duplicateShape(); break;
+                }
+                draw();
+            });
+        }
+
+        function setTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.tool-item').forEach(b => b.classList.toggle('active', b.id === 'tool-'+tool));
+            canvas.style.cursor = tool === 'text' ? 'text' : 'default';
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = canvasBgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            shapes.forEach((s, i) => {
+                ctx.save();
+                ctx.translate(s.x + s.w/2, s.y + s.h/2);
+                ctx.rotate(s.rotation * Math.PI / 180);
+                
+                ctx.globalAlpha = s.opacity;
+                ctx.globalCompositeOperation = s.blendMode || 'source-over';
+                
+                if (s.shadowBlur > 0 || Math.abs(s.shadowOffset) > 0) {
+                    ctx.shadowColor = s.shadowColor;
+                    ctx.shadowBlur = s.shadowBlur;
+                    ctx.shadowOffsetX = s.shadowOffset;
+                    ctx.shadowOffsetY = s.shadowOffset;
+                }
+
+                if (s.blur > 0) {
+                    ctx.filter = `blur(${s.blur}px)`;
+                }
+                
+                if (s.isGradient && s.gradientColors) {
+                    const grad = ctx.createLinearGradient(-s.w/2, -s.h/2, s.w/2, s.h/2);
+                    grad.addColorStop(0, s.gradientColors[0]);
+                    grad.addColorStop(1, s.gradientColors[1]);
+                    ctx.fillStyle = grad;
+                } else {
+                    ctx.fillStyle = s.color;
+                }
+                
+                if (s.strokeWidth > 0) {
+                    ctx.lineWidth = s.strokeWidth;
+                    ctx.strokeStyle = s.strokeColor;
+                }
+
+                ctx.beginPath();
+                
+                if (s.type === 'rect') ctx.roundRect(-s.w/2, -s.h/2, s.w, s.h, 12);
+                else if (s.type === 'circle') ctx.arc(0, 0, s.w/2, 0, Math.PI*2);
+                else if (s.type === 'star') drawStar(0, 0, 5, s.w/2, s.w/4);
+                else if (s.type === 'triangle') {
+                    ctx.moveTo(0, -s.h/2);
+                    ctx.lineTo(s.w/2, s.h/2);
+                    ctx.lineTo(-s.w/2, s.h/2);
+                }
+                else if (s.type === 'hexagon') drawPolygon(0, 0, 6, s.w/2);
+                else if (s.type === 'diamond') drawPolygon(0, 0, 4, s.w/2);
+                else if (s.type === 'image' && s.imageObj) {
+                    ctx.drawImage(s.imageObj, -s.w/2, -s.h/2, s.w, s.h);
+                }
+                else if (s.type === 'text') {
+                    ctx.font = `bold ${s.fontSize}px Inter`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(s.text, 0, 0);
+                    if (s.strokeWidth > 0) ctx.strokeText(s.text, 0, 0);
+                }
+                
+                if (s.type !== 'text' && s.type !== 'image') {
+                    ctx.fill();
+                    if (s.strokeWidth > 0) ctx.stroke();
+                }
+
+                ctx.restore();
+
+                if (i === selectedIdx) {
+                    ctx.save();
+                    ctx.translate(s.x + s.w/2, s.y + s.h/2);
+                    ctx.rotate(s.rotation * Math.PI / 180);
+                    
+                    ctx.setLineDash([6, 4]);
+                    ctx.strokeStyle = '#22d3ee';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(-s.w/2 - 5, -s.h/2 - 5, s.w + 10, s.h + 10);
+                    
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#fff';
+                    const as = 8;
+                    [[-s.w/2-9,-s.h/2-9],[s.w/2+1,-s.h/2-9],[-s.w/2-9,s.h/2+1],[s.w/2+1,s.h/2+1]].forEach(p => {
+                        ctx.beginPath();
+                        ctx.arc(p[0]+as/2, p[1]+as/2, as/2, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.stroke();
+                    });
+                    ctx.restore();
+                }
+            });
+            updateLayerList();
+            updateStatus();
+        }
+
+        function drawStar(cx, cy, spikes, outer, inner) {
+            let rot = Math.PI/2*3, step = Math.PI/spikes;
+            ctx.moveTo(cx, cy - outer);
+            for(let i=0; i<spikes; i++) {
+                ctx.lineTo(cx + Math.cos(rot)*outer, cy + Math.sin(rot)*outer); rot += step;
+                ctx.lineTo(cx + Math.cos(rot)*inner, cy + Math.sin(rot)*inner); rot += step;
+            }
+            ctx.closePath();
+        }
+
+        function drawPolygon(cx, cy, sides, radius) {
+            for (let i = 0; i < sides; i++) {
+                ctx.lineTo(cx + radius * Math.cos(i * 2 * Math.PI / sides),
+                           cy + radius * Math.sin(i * 2 * Math.PI / sides));
+            }
+            ctx.closePath();
+        }
+
+        function applyMagicGradient() {
+            if(selectedIdx === -1) return;
+            const colors = ['#8b5cf6', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
+            const c1 = colors[Math.floor(Math.random() * colors.length)];
+            let c2 = colors[Math.floor(Math.random() * colors.length)];
+            while(c1 === c2) c2 = colors[Math.floor(Math.random() * colors.length)];
+            
+            shapes[selectedIdx].isGradient = true;
+            shapes[selectedIdx].gradientColors = [c1, c2];
+            draw();
+        }
+
+        document.getElementById('img-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const ratio = img.width / img.height;
+                    addShape('image');
+                    const s = shapes[shapes.length - 1];
+                    s.imageObj = img;
+                    s.w = 300; 
+                    s.h = 300 / ratio;
+                    s.color = 'transparent';
+                    draw();
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+            this.value = '';
+        });
+
+        function addShape(type, color = '#ec4899') {
+            const s = {
+                type, color, x: canvas.width/2 - 75, y: canvas.height/2 - 75,
+                w: 150, h: 150, opacity: 1, blur: 0, rotation: 0,
+                strokeWidth: 0, strokeColor: '#ffffff',
+                shadowColor: '#000000', shadowBlur: 0, shadowOffset: 0,
+                blendMode: 'source-over', isGradient: false, gradientColors: null, imageObj: null,
+                text: type === 'text' ? 'PRO Text' : '', fontSize: 40
+            };
+            shapes.push(s);
+            select(shapes.length - 1);
+            setTool('select');
+        }
+
+        function select(idx) {
+            selectedIdx = idx;
+            
+            if (idx === -1) {
+                panelCanvas.classList.remove('hidden');
+                panelElement.classList.add('hidden');
+                layerBadge.innerText = 'Canvas Settings';
+                layerBadge.classList.remove('text-violet-400', 'bg-violet-500/20');
+                btnDelete.classList.add('hidden');
+            } else {
+                panelCanvas.classList.add('hidden');
+                panelElement.classList.remove('hidden');
+                btnDelete.classList.remove('hidden');
+                
+                const s = shapes[idx];
+                layerBadge.innerText = `${s.type} Element`;
+                layerBadge.classList.add('text-violet-400', 'bg-violet-500/20');
+                
+                colorPicker.value = s.color;
+                colorHex.value = s.color.toUpperCase();
+                strokeColorInput.value = s.strokeColor;
+                strokeWidthInput.value = s.strokeWidth;
+                if(blendModeSelect) blendModeSelect.value = s.blendMode || 'source-over';
+                
+                opacityRange.value = s.opacity;
+                document.getElementById('opacity-val').innerText = Math.round(s.opacity*100)+'%';
+                blurRange.value = s.blur;
+                document.getElementById('blur-val').innerText = s.blur+'px';
+                rotationRange.value = s.rotation;
+                document.getElementById('rotation-val').innerText = s.rotation+'°';
+                
+                shadowColorInput.value = s.shadowColor;
+                shadowBlurInput.value = s.shadowBlur;
+                document.getElementById('shadow-blur-val').innerText = s.shadowBlur+'px';
+                shadowOffsetInput.value = s.shadowOffset;
+                document.getElementById('shadow-offset-val').innerText = s.shadowOffset+'px';
+                
+                const isText = s.type === 'text';
+                document.getElementById('prop-section-text').classList.toggle('hidden', !isText);
+                if (isText) { textContent.value = s.text; fontSizeInput.value = s.fontSize; }
+            }
+            draw();
+        }
+
+        function deleteSelected() {
+            if(selectedIdx !== -1) {
+                shapes.splice(selectedIdx, 1);
+                select(-1);
+            }
+        }
+
+        function duplicateShape() {
+            const s = {...shapes[selectedIdx]};
+            s.x += 20; s.y += 20;
+            shapes.push(s);
+            select(shapes.length - 1);
+        }
+
+        function moveLayer(dir) {
+            if(selectedIdx === -1) return;
+            const to = dir === 'up' ? selectedIdx + 1 : selectedIdx - 1;
+            if(to >=0 && to < shapes.length) {
+                [shapes[selectedIdx], shapes[to]] = [shapes[to], shapes[selectedIdx]];
+                select(to);
+            }
+        }
+
+        function updateLayerList() {
+            const list = document.getElementById('layer-list');
+            list.innerHTML = '';
+            document.getElementById('layer-count').innerText = shapes.length;
+            
+            [...shapes].reverse().forEach((s, i) => {
+                const actualIdx = shapes.length - 1 - i;
+                const div = document.createElement('div');
+                div.className = `layer-item flex items-center justify-between px-6 py-3 cursor-pointer border-b border-white/5 hover:bg-white/5 ${actualIdx === selectedIdx ? 'active' : ''}`;
+                div.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-3 h-3 rounded-sm border border-white/20" style="background:${s.color}"></div>
+                        <span class="text-[11px] font-bold text-slate-300">${s.type.toUpperCase()}</span>
+                    </div>
+                    <svg class="w-3 h-3 text-slate-600" fill="currentColor" viewBox="0 0 20 20"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path></svg>
+                `;
+                div.onclick = () => select(actualIdx);
+                list.appendChild(div);
+            });
+        }
+
+        function updateStatus() {
+            if(selectedIdx === -1) { statusInd.innerText = "LAGO PRO | READY"; return; }
+            const s = shapes[selectedIdx];
+            statusInd.innerText = `POS: ${Math.round(s.x)}, ${Math.round(s.y)} | SIZE: ${Math.round(s.w)}x${Math.round(s.h)}`;
+        }
+
+        function exportCanvas() {
+            const tempIdx = selectedIdx;
+            selectedIdx = -1; 
+            draw();
+            
+            const link = document.createElement('a');
+            link.download = 'LAGO_PRO_Design.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            
+            selectedIdx = tempIdx;
+            draw();
+        }
+
+        // --- 터치 및 마우스 이벤트 통합 처리 ---
+        function getEventPos(e) {
+            const r = canvas.getBoundingClientRect();
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+            // 터치 이벤트인 경우 첫 번째 손가락의 위치를 가져옴
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            }
+            return { mx: clientX - r.left, my: clientY - r.top };
+        }
+
+        function onPointerDown(e) {
+            const { mx, my } = getEventPos(e);
+
+            if (currentTool === 'text') { addShape('text'); shapes[shapes.length-1].x = mx-75; shapes[shapes.length-1].y = my-25; return; }
+
+            if (selectedIdx !== -1) {
+                const s = shapes[selectedIdx];
+                const anchors = [['tl',s.x-10,s.y-10],['tr',s.x+s.w,s.y-10],['bl',s.x-10,s.y+s.h],['br',s.x+s.w,s.y+s.h]];
+                for(let [k,ax,ay] of anchors) {
+                    // 모바일 터치 편의성을 위해 크기 조절 판정 범위를 20에서 30으로 확장
+                    if(mx>=ax && mx<=ax+30 && my>=ay && my<=ay+30) { isResizing=true; resizeAnchor=k; return; }
+                }
+            }
+
+            for(let i=shapes.length-1; i>=0; i--) {
+                const s = shapes[i];
+                if(mx>=s.x && mx<=s.x+s.w && my>=s.y && my<=s.y+s.h) { select(i); isDragging=true; dragOff={x:mx-s.x, y:my-s.y}; return; }
+            }
+            select(-1);
+        }
+
+        function onPointerMove(e) {
+            if (selectedIdx === -1) return;
+            if (!isDragging && !isResizing) return;
+            
+            // 터치 환경에서 도형을 조작할 때 화면 자체가 스크롤되는 것을 방지
+            if (e.type === 'touchmove') e.preventDefault();
+
+            const { mx, my } = getEventPos(e);
+            const s = shapes[selectedIdx];
+
+            if (isResizing) {
+                if(resizeAnchor === 'br') { s.w = Math.max(20, mx-s.x); s.h = Math.max(20, my-s.y); }
+                else if(resizeAnchor === 'tl') { const ow=s.x+s.w, oh=s.y+s.h; s.x=Math.min(mx, ow-20); s.y=Math.min(my, oh-20); s.w=ow-s.x; s.h=oh-s.y; }
+                draw();
+            } else if (isDragging) {
+                let nx = mx - dragOff.x, ny = my - dragOff.y;
+                
+                guideX.style.display = 'none'; guideY.style.display = 'none';
+                if(Math.abs(nx + s.w/2 - canvas.width/2) < SNAP_THRESHOLD) { nx = canvas.width/2 - s.w/2; guideX.style.display = 'block'; guideX.style.left = canvas.width/2+'px'; }
+                if(Math.abs(ny + s.h/2 - canvas.height/2) < SNAP_THRESHOLD) { ny = canvas.height/2 - s.h/2; guideY.style.display = 'block'; guideY.style.top = canvas.height/2+'px'; }
+                
+                s.x = nx; s.y = ny;
+                draw();
+            }
+        }
+
+        function onPointerUp() { 
+            isDragging = isResizing = false; 
+            guideX.style.display = guideY.style.display = 'none'; 
+        }
+
+        // 마우스 이벤트 바인딩 (PC 지원)
+        canvas.addEventListener('mousedown', onPointerDown);
+        window.addEventListener('mousemove', onPointerMove, { passive: false });
+        window.addEventListener('mouseup', onPointerUp);
+
+        // 터치 이벤트 바인딩 (모바일 지원)
+        canvas.addEventListener('touchstart', onPointerDown, { passive: false });
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('touchend', onPointerUp);
+
+        const updateShapeProp = (key, val) => { if(selectedIdx !== -1) { shapes[selectedIdx][key] = val; draw(); } };
+
+        canvasBgColorInput.oninput = e => { canvasBgHexInput.value = e.target.value.toUpperCase(); canvasBgColor = e.target.value; container.style.backgroundColor = canvasBgColor; draw(); };
+        canvasBgHexInput.oninput = e => { if(/^#[0-9A-F]{6}$/i.test(e.target.value)) { canvasBgColorInput.value = e.target.value; canvasBgColor = e.target.value; container.style.backgroundColor = canvasBgColor; draw(); } };
+
+        colorPicker.oninput = e => { colorHex.value = e.target.value.toUpperCase(); updateShapeProp('isGradient', false); updateShapeProp('color', e.target.value); };
+        colorHex.oninput = e => { if(/^#[0-9A-F]{6}$/i.test(e.target.value)) { colorPicker.value = e.target.value; updateShapeProp('isGradient', false); updateShapeProp('color', e.target.value); } };
+        if(blendModeSelect) blendModeSelect.onchange = e => updateShapeProp('blendMode', e.target.value);
+        strokeColorInput.oninput = e => updateShapeProp('strokeColor', e.target.value);
+        strokeWidthInput.oninput = e => updateShapeProp('strokeWidth', parseInt(e.target.value)||0);
+        
+        opacityRange.oninput = e => { document.getElementById('opacity-val').innerText = Math.round(e.target.value*100)+'%'; updateShapeProp('opacity', parseFloat(e.target.value)); };
+        blurRange.oninput = e => { document.getElementById('blur-val').innerText = e.target.value+'px'; updateShapeProp('blur', parseInt(e.target.value)); };
+        rotationRange.oninput = e => { document.getElementById('rotation-val').innerText = e.target.value+'°'; updateShapeProp('rotation', parseInt(e.target.value)); };
+        
+        shadowColorInput.oninput = e => updateShapeProp('shadowColor', e.target.value);
+        shadowBlurInput.oninput = e => { document.getElementById('shadow-blur-val').innerText = e.target.value+'px'; updateShapeProp('shadowBlur', parseInt(e.target.value)); };
+        shadowOffsetInput.oninput = e => { document.getElementById('shadow-offset-val').innerText = e.target.value+'px'; updateShapeProp('shadowOffset', parseInt(e.target.value)); };
+
+        textContent.oninput = e => updateShapeProp('text', e.target.value);
+        fontSizeInput.oninput = e => updateShapeProp('fontSize', parseInt(e.target.value)||20);
+    </script>
+</body>
+</html>
