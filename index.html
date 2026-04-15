@@ -1,0 +1,2519 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LAGO PRO | Ultimate Creative Workspace</title>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+    
+    <!-- Libraries: Tailwind, jsPDF(PDF export), JSZip(ZIP compression) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <style>
+        /* 기본 폰트 설정 */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        
+        :root {
+            --brand-primary: #8b5cf6;
+            --brand-secondary: #ec4899;
+            --bg-editor: #020617;
+            --sidebar-bg: rgba(15, 23, 42, 0.9);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-bg: rgba(15, 23, 42, 0.6);
+        }
+
+        body { 
+            font-family: 'Pretendard', 'Inter', sans-serif; 
+            background-color: var(--bg-editor); 
+            color: #f8fafc; 
+            margin: 0; 
+            overflow: hidden; 
+            height: 100vh; 
+        }
+
+        /* 화면 전환 뷰 애니메이션 */
+        .view-section { 
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; 
+            opacity: 0; visibility: hidden; pointer-events: none; 
+            transform: scale(0.98); transition: all 0.4s ease-in-out; 
+            z-index: 10; 
+        }
+        .view-section.active { 
+            opacity: 1; visibility: visible; pointer-events: auto; 
+            transform: scale(1); z-index: 20; 
+        }
+
+        /* 그라데이션 텍스트 (LAGO PRO 등) */
+        .gradient-text-pro { 
+            background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary)); 
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
+        }
+
+        /* =========================================
+           글로벌 플로팅 시계 (크기 조절 가능)
+        ========================================= */
+        #global-clock {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 999999;
+            background: rgba(15, 23, 42, 0.85); 
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            padding: 10px 24px;
+            border-radius: 40px;
+            font-size: 13px; /* 기본 폰트 사이즈 */
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+            transition: background-color 0.3s, border-radius 0.3s;
+            white-space: nowrap;
+            color: #d8b4fe;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #global-clock.in-editor {
+            background: rgba(15, 23, 42, 0.9);
+            border-color: rgba(139, 92, 246, 0.4);
+            border-radius: 20px;
+        }
+        #global-clock:active { cursor: grabbing; }
+
+        /* 시계 크기 조절 점 (핸들) */
+        .clock-resize-handle {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background-color: #ec4899;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 10;
+        }
+        #global-clock.show-handles .clock-resize-handle {
+            opacity: 1;
+            pointer-events: auto;
+            cursor: nwse-resize;
+        }
+        .clock-handle-tl { top: -4px; left: -4px; }
+        .clock-handle-tr { top: -4px; right: -4px; cursor: nesw-resize !important; }
+        .clock-handle-bl { bottom: -4px; left: -4px; cursor: nesw-resize !important; }
+        .clock-handle-br { bottom: -4px; right: -4px; }
+
+        /* =========================================
+           로그인 화면 UI (다닥다닥 붙는 현상 해결)
+        ========================================= */
+        .auth-section { 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px); 
+            background-size: 40px 40px; 
+        }
+        .auth-card { 
+            background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(24px); 
+            border-radius: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); 
+            width: 100%; max-width: 420px; text-align: center; 
+            border: 1px solid var(--glass-border); padding: 40px 30px; 
+        }
+        .auth-input-group { 
+            display: flex; flex-direction: column; gap: 8px; text-align: left; margin-bottom: 24px; width: 100%; 
+        }
+        .auth-select-label { 
+            font-size: 12px; color: #94a3b8; font-weight: 800; padding-left: 5px; 
+        }
+        .auth-select-box, .auth-custom-input { 
+            width: 100%; padding: 14px 16px; border-radius: 12px; 
+            border: 1px solid rgba(255,255,255,0.1); font-size: 15px; outline: none; 
+            background: rgba(255,255,255,0.03); color: #f8fafc; transition: all 0.2s; 
+        }
+        .auth-select-box { cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+        .auth-select-box:hover, .auth-custom-input:focus { border-color: var(--brand-primary); background: rgba(255,255,255,0.08); }
+        .auth-action-btn { 
+            margin-top: 10px; padding: 16px; border-radius: 12px; border: none; 
+            background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary)); 
+            color: #fff; font-weight: 800; cursor: pointer; width: 100%; font-size: 16px; 
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4); transition: transform 0.2s, filter 0.2s; 
+        }
+        .auth-action-btn:hover { filter: brightness(1.15); }
+        .auth-action-btn:active { transform: scale(0.98); }
+
+        /* =========================================
+           대시보드 메인 화면
+        ========================================= */
+        #dashboard-section { overflow-y: auto; overflow-x: hidden; height: 100vh; display: flex; flex-direction: column; }
+        #bg-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        .glass-panel { background: var(--glass-bg); backdrop-filter: blur(20px); border: 1px solid var(--glass-border); }
+        .premium-card { position: relative; transition: transform 0.3s ease, box-shadow 0.3s ease; cursor: pointer; display: flex; flex-direction: column; height: 100%; }
+        .premium-card:hover { transform: translateY(-6px); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+
+        /* =========================================
+           공통 모달 스타일
+        ========================================= */
+        .auth-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 20000; backdrop-filter: blur(8px); padding: 20px; }
+        .auth-modal-overlay.active { display: flex; }
+        .auth-modal-content { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(24px); border: 1px solid var(--glass-border); border-radius: 24px; padding: 30px; width: 100%; max-width: 440px; max-height: 85vh; overflow-y: auto; position: relative; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); }
+        
+        /* 이름 선택 버튼 그리드 */
+        .auth-name-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 15px; }
+        .auth-name-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.05); padding: 14px 2px; border-radius: 12px; font-size: 14px; font-weight: 700; color: #cbd5e1; cursor: pointer; text-align: center; transition: all 0.2s; }
+        .auth-name-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .auth-name-btn:active { background: var(--brand-primary); color: white; border-color: var(--brand-primary); }
+        .auth-admin-btn { grid-column: span 4; background: rgba(0,0,0,0.2); color: #94a3b8; font-size: 13px; padding: 12px; margin-top: 5px; border-color: rgba(255,255,255,0.1); }
+        .auth-sub-btn { padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: #cbd5e1; font-weight: 700; cursor: pointer; width: 100%; margin-top: 15px; transition: all 0.2s; }
+
+        /* 프로필 상자 */
+        .profile-info-box { background: rgba(0,0,0,0.2); padding: 16px; border-radius: 12px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.05); text-align: left; }
+        .profile-label { font-size: 11px; color: #94a3b8; font-weight: 800; margin-bottom: 4px; text-transform: uppercase; }
+        .profile-value { font-size: 15px; color: #f8fafc; font-weight: 600; }
+
+        /* =========================================
+           OS Window (파일 관리자 모달)
+        ========================================= */
+        .os-window { background: #1e1e24; border-radius: 12px; box-shadow: 0 40px 80px rgba(0,0,0,0.7); border: 1px solid #333; overflow: hidden; display: flex; flex-direction: column; width: 100%; max-width: 850px; height: 85vh; max-height: 650px; position: relative; }
+        .os-titlebar { background: #2a2a30; height: 40px; display: flex; justify-content: space-between; align-items: center; padding: 0 16px; border-bottom: 1px solid #111; flex-shrink: 0; cursor: grab; user-select: none; }
+        .os-titlebar:active { cursor: grabbing; }
+        .os-close-btn { color: #94a3b8; font-size: 16px; font-weight: bold; cursor: pointer; padding: 4px 12px; transition: 0.2s; border-radius: 6px; }
+        .os-close-btn:hover { background: #ef4444; color: white; }
+        
+        .os-body { display: flex; flex-grow: 1; overflow: hidden; }
+        .os-sidebar { width: 200px; background: #1e1e24; border-right: 1px solid #333; padding: 16px 10px; flex-shrink: 0; overflow-y: auto; }
+        .os-sidebar-title { color: #666; font-size: 11px; font-weight: 800; margin-bottom: 8px; padding-left: 10px; text-transform: uppercase; margin-top: 10px; }
+        .os-sidebar-item { padding: 10px 12px; border-radius: 8px; color: #ccc; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: 0.1s; margin-bottom: 4px;}
+        .os-sidebar-item.active { background: var(--brand-primary); color: white; }
+        .os-sidebar-item:hover:not(.active) { background: rgba(255,255,255,0.05); }
+        
+        .os-content { flex-grow: 1; background: #16161a; padding: 20px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .os-file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 16px; flex-grow: 1; overflow-y: auto; align-content: start; }
+        .os-file-item { padding: 12px 8px; display: flex; flex-direction: column; align-items: center; cursor: pointer; border-radius: 8px; border: 1px solid transparent; text-align: center; transition: 0.1s; }
+        .os-file-item:hover { background: rgba(255,255,255,0.05); }
+        .os-file-item.selected { background: rgba(139, 92, 246, 0.2); border-color: var(--brand-primary); }
+        .os-file-icon { width: 48px; height: 48px; background: #2a2a30; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; font-size: 14px; font-weight: 900; border: 1px solid #333; }
+        
+        .os-input { background: #1e1e24; border: 1px solid #444; color: #fff; padding: 10px 12px; border-radius: 8px; outline: none; transition: border-color 0.2s; }
+        .os-input:focus { border-color: var(--brand-primary); }
+        .os-btn { padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; transition: 0.2s; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .os-btn-primary { background: var(--brand-primary); color: #fff; }
+        .os-btn-primary:hover { filter: brightness(1.1); }
+
+        /* =========================================
+           에디터 (LAGO PRO) 및 툴바
+        ========================================= */
+        .lago-app { display: flex; flex-direction: column; }
+        .glass-ui { background: var(--sidebar-bg); backdrop-filter: blur(24px); border: 1px solid var(--glass-border); }
+        .tool-item { transition: all 0.2s; }
+        .tool-item:hover:not(.active) { background: rgba(255, 255, 255, 0.05); }
+        .tool-item.active { background: var(--brand-primary); color: white; box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+        
+        #editor-container { 
+            position: relative; width: 100%; height: calc(100vh - 64px - 40px); 
+            background-color: #0f172a; 
+            background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px); 
+            background-size: 40px 40px; 
+        }
+        
+        #design-canvas { touch-action: none; width: 100%; height: 100%; } /* 캔버스 터치 밀림 완벽 차단 */
+
+        /* 다중 탭 (Project Tabs) */
+        #project-tabs { display: flex; overflow-x: auto; background: #020617; padding: 6px 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); gap: 4px; }
+        .proj-tab { padding: 8px 16px; background: rgba(255,255,255,0.05); color: #94a3b8; font-size: 11px; font-weight: 700; border-radius: 10px 10px 0 0; cursor: pointer; white-space: nowrap; border: 1px solid transparent; border-bottom: none; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .proj-tab.active { background: rgba(15, 23, 42, 0.9); color: #fff; border-color: rgba(255,255,255,0.1); }
+        .proj-tab .close-tab { color: #ef4444; cursor: pointer; opacity: 0.5; transition: 0.2s; padding-left: 4px; }
+        .proj-tab .close-tab:hover { opacity: 1; }
+
+        /* 폰트 드롭존 */
+        .font-dropzone { border: 2px dashed rgba(255,255,255,0.2); border-radius: 16px; padding: 40px 20px; text-align: center; background: rgba(0,0,0,0.2); transition: all 0.2s; }
+        .font-dropzone.dragover { border-color: var(--brand-primary); background: rgba(139, 92, 246, 0.1); transform: scale(1.02); }
+
+        input[type="range"] { accent-color: var(--brand-primary); height: 4px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+    </style>
+</head>
+<body class="antialiased select-none">
+
+    <!-- 글로벌 시계 -->
+    <div id="global-clock" onclick="showClockHandles()">
+        <span id="clock-text">시계 렌더링 중...</span>
+        <!-- 크기 조절을 위한 숨겨진 핸들 -->
+        <div class="clock-resize-handle clock-handle-tl" onmousedown="startClockResize(event, 'tl')" ontouchstart="startClockResize(event, 'tl')"></div>
+        <div class="clock-resize-handle clock-handle-tr" onmousedown="startClockResize(event, 'tr')" ontouchstart="startClockResize(event, 'tr')"></div>
+        <div class="clock-resize-handle clock-handle-bl" onmousedown="startClockResize(event, 'bl')" ontouchstart="startClockResize(event, 'bl')"></div>
+        <div class="clock-resize-handle clock-handle-br" onmousedown="startClockResize(event, 'br')" ontouchstart="startClockResize(event, 'br')"></div>
+    </div>
+
+    <!-- ==========================================
+         [1] 로그인 섹션
+    ========================================== -->
+    <div id="login-section" class="view-section auth-section active">
+        <div class="auth-card">
+            <div class="font-black text-4xl tracking-tighter text-white flex items-center justify-center gap-1.5 mb-6">
+                LAGO <span class="gradient-text-pro font-black tracking-tight">PRO</span> 🔒
+            </div>
+            <p style="font-size: 13px; color: #94a3b8; margin-bottom: 30px;">멤버십 인증 후 프로 워크스페이스에 입장하세요.</p>
+            
+            <div class="auth-input-group">
+                <span class="auth-select-label">사용자 선택</span>
+                <div class="auth-select-box" onclick="openNameModal()">
+                    <span id="login-name-text" style="color: #64748b;">목록에서 선택</span>
+                    <span style="font-size:12px; color: #64748b;">▼</span>
+                </div>
+            </div>
+            <div class="auth-input-group">
+                <span class="auth-select-label">접속번호 (PIN)</span>
+                <input type="password" id="loginPw" class="auth-custom-input" placeholder="비밀번호 4자리" onkeypress="if(event.keyCode===13) processLogin()">
+            </div>
+            
+            <button class="auth-action-btn" onclick="processLogin()">대시보드 접속</button>
+            
+            <div style="margin-top: 25px; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 12px; text-align: left; font-size: 12px; color: #94a3b8; line-height: 1.6; border: 1px solid rgba(255,255,255,0.05);">
+                <span style="font-weight: 800; color: #d8b4fe; display: block; margin-bottom: 5px;">✨ 외부 서비스 통합 연동 안내</span>
+                비밀번호 변경 및 멤버십 관리는 커뮤니티에서 진행해 주세요.<br>
+                <button onclick="confirmPurpleTalk()" style="background:transparent; border:none; color:#f472b6; font-weight:700; padding:0; margin-top:4px; cursor:pointer; text-decoration:underline;">PURPLE TALK 이동하기 ➔</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         [2] 대시보드 섹션
+    ========================================== -->
+    <div id="dashboard-section" class="view-section">
+        <canvas id="bg-canvas"></canvas>
+        <header class="fixed top-0 w-full z-50 glass-panel h-16 flex items-center justify-between px-6 md:px-12 border-none bg-black/20 backdrop-blur-md">
+            <div class="font-black text-2xl tracking-tighter text-white">LAGO <span class="gradient-text-pro">PRO</span></div>
+            <div id="dash-username-badge" class="flex items-center gap-3 bg-white/5 px-4 py-1.5 rounded-full border border-white/10 cursor-pointer hover:bg-white/10 transition shadow-lg" onclick="openProfileModal()">
+                <img id="dash-avatar" src="" alt="Profile" class="w-7 h-7 rounded-full object-cover shadow-md border border-white/20" style="display: none;">
+                <div id="dash-avatar-fallback" class="w-7 h-7 bg-gradient-to-tr from-violet-500 to-pink-500 rounded-full flex items-center justify-center font-bold text-white text-xs shadow-md border border-white/20">U</div>
+                <span class="text-sm font-bold text-slate-200" id="dash-username">USER</span>
+            </div>
+        </header>
+
+        <main class="relative z-10 flex-1 flex flex-col items-center px-4 pt-28 pb-20 w-full min-h-screen">
+            <div class="text-center w-full max-w-4xl mb-10 mt-6">
+                <h1 class="text-4xl md:text-5xl font-black mb-4 leading-tight tracking-tight text-white" id="dash-welcome-msg">크리에이티브한 <span class="gradient-text-pro">나의 워크스페이스</span></h1>
+                <p class="text-slate-400 text-sm font-light">프리미엄 서비스가 활성화되었습니다. 스튜디오를 선택하세요.</p>
+            </div>
+            
+            <div id="dashboard-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 w-full max-w-3xl mb-12">
+                <div onclick="openEditor()" class="glass-panel premium-card rounded-3xl p-6 md:p-8 flex flex-col items-center text-center border-violet-500/20 hover:border-violet-500/50">
+                    <div class="w-12 h-12 bg-violet-600/20 rounded-2xl flex items-center justify-center mb-3 text-violet-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">2D 스튜디오</h3>
+                    <p class="text-slate-400 text-xs mb-4 leading-relaxed hidden sm:block flex-1">모든 도형과 벡터 도구를 활용하는<br>가장 강력한 2D 캔버스 에디터</p>
+                    <button class="w-full py-3 bg-gradient-to-r from-violet-600 to-pink-600 text-white rounded-xl font-bold shadow-lg shadow-violet-500/25 mt-auto text-sm">입장하기</button>
+                </div>
+                
+                <div onclick="checkAndOpen3D()" class="glass-panel premium-card rounded-3xl p-6 md:p-8 flex flex-col items-center text-center border-blue-500/20 hover:border-blue-500/50 relative overflow-hidden">
+                    <div id="dim-3d" class="absolute inset-0 bg-black/60 z-10 hidden flex-col items-center justify-center backdrop-blur-sm pointer-events-auto">
+                        <span class="text-red-400 font-bold text-sm mb-2">관리자에 의해 비활성화됨</span>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-600/20 rounded-2xl flex items-center justify-center mb-3 text-blue-400 relative z-0">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2 relative z-0">3D 스튜디오</h3>
+                    <p class="text-slate-400 text-xs mb-4 leading-relaxed hidden sm:block flex-1 relative z-0">자유로운 카메라와 오브젝트를<br>지원하는 차세대 물리 에디터</p>
+                    <button class="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/25 mt-auto text-sm relative z-0">입장하기</button>
+                </div>
+
+                <div onclick="openProfileModal()" class="glass-panel premium-card rounded-3xl p-6 md:p-8 flex flex-col items-center text-center border-emerald-500/20 hover:border-emerald-500/50">
+                    <div class="w-12 h-12 bg-emerald-600/20 rounded-2xl flex items-center justify-center mb-3 text-emerald-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">내 계정 정보</h3>
+                    <p class="text-slate-400 text-xs mb-4 leading-relaxed hidden sm:block flex-1">멤버십, 비밀번호 확인 및<br>프로필 관리</p>
+                    <button class="w-full py-3 bg-white/10 text-white rounded-xl font-bold mt-auto hover:bg-white/20 transition text-sm">정보 열람</button>
+                </div>
+
+                <!-- 시스템 종료 버튼 (다른 카드와 동일한 형태) -->
+                <div onclick="processLogout()" class="glass-panel premium-card rounded-3xl p-6 md:p-8 flex flex-col items-center text-center border-red-500/20 hover:border-red-500/50">
+                    <div class="w-12 h-12 bg-red-600/20 rounded-2xl flex items-center justify-center mb-3 text-red-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">시스템 종료</h3>
+                    <p class="text-slate-400 text-xs mb-4 leading-relaxed hidden sm:block flex-1">현재 워크스페이스 세션을<br>안전하게 종료합니다.</p>
+                    <button class="w-full py-3 bg-red-500/20 text-red-400 rounded-xl font-bold mt-auto hover:bg-red-500/30 transition text-sm">안전 로그아웃</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ==========================================
+         [3] 2D 에디터 섹션 (다중 탭 지원)
+    ========================================== -->
+    <div id="lago-app" class="view-section lago-app">
+        <header class="h-14 border-b border-white/5 flex items-center justify-between px-4 glass-ui z-50 flex-shrink-0">
+            <div class="font-black text-xl text-white">LAGO <span class="gradient-text-pro">PRO</span></div>
+            <div class="flex items-center gap-2">
+                <button onclick="clearCanvasConfirm()" class="px-3 py-1.5 bg-red-500/10 text-red-400 text-xs font-bold rounded-lg border border-red-500/30 hover:bg-red-500/20 transition">모두 지우기</button>
+                <div class="h-5 w-px bg-white/10 mx-1"></div>
+                <button onclick="createNewProjectTab()" class="px-3 py-1.5 bg-slate-700/50 text-xs font-bold rounded-lg border border-slate-600 text-white hover:bg-slate-600 transition">새 탭 열기</button>
+                <button onclick="openOSModal('save')" class="px-3 py-1.5 bg-blue-600/20 text-blue-400 text-xs font-bold rounded-lg border border-blue-500/30 hover:bg-blue-600/40 transition">파일 관리</button>
+                <div class="h-5 w-px bg-white/10 mx-1"></div>
+                <button onclick="goToDashboard()" class="px-3 py-1.5 bg-white/10 text-xs font-bold rounded-lg text-white hover:bg-white/20 transition">대시보드</button>
+            </div>
+        </header>
+
+        <!-- 멀티 탭 -->
+        <div id="project-tabs" class="flex-shrink-0"></div>
+
+        <div class="flex flex-1 overflow-hidden">
+            <!-- 좌측 툴바 -->
+            <aside class="w-16 glass-ui border-l-0 border-y-0 flex flex-col items-center py-4 gap-3 z-40 overflow-y-auto flex-shrink-0">
+                <button class="tool-item active p-2.5 rounded-xl" id="tool-select" onclick="setTool('select')" title="선택 도구"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button class="tool-item p-2.5 rounded-xl" id="tool-text" onclick="setTool('text')" title="텍스트 입력"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 7h14M12 7v14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button class="tool-item p-2.5 rounded-xl" id="tool-line" onclick="setTool('line')" title="선 그리기 (끝점 조절 가능)"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 19L19 5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button class="tool-item p-2.5 rounded-xl" id="tool-draw" onclick="setTool('draw')" title="자유 곡선 (AI 보정)"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                
+                <div class="w-8 h-px bg-white/10 my-1 flex-shrink-0"></div>
+                
+                <button class="tool-item p-2.5 rounded-xl text-pink-400" onclick="document.getElementById('img-upload').click()" title="내 PC 이미지 삽입"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button class="tool-item p-2.5 rounded-xl text-emerald-400" onclick="openImageSearchModal()" title="AI 이미지 생성"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button class="tool-item p-2.5 rounded-xl text-blue-400" onclick="openFontManagerModal()" title="폰트(.ttf) 추가"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <input type="file" id="img-upload" accept="image/*" class="hidden">
+            </aside>
+
+            <!-- 캔버스 컨테이너 -->
+            <main id="editor-container" class="flex-1 relative bg-[#0f172a] overflow-hidden">
+                <div id="guide-x" class="hidden absolute bg-pink-500 w-px h-full top-0 z-10 pointer-events-none"></div>
+                <div id="guide-y" class="hidden absolute bg-pink-500 h-px w-full left-0 z-10 pointer-events-none"></div>
+                <canvas id="design-canvas"></canvas>
+                <div id="status-indicator" class="absolute top-4 left-4 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-lg text-[10px] font-mono text-slate-300 pointer-events-none z-10">POS: 0, 0</div>
+            </main>
+
+            <!-- 우측 속성 패널 -->
+            <aside class="w-72 glass-ui flex flex-col z-40 flex-shrink-0">
+                <div class="p-5 border-b border-white/5 flex justify-between items-center">
+                    <h3 class="font-bold text-white text-sm">속성 패널</h3>
+                    <button id="btn-delete" onclick="deleteSelectedShape()" class="p-1.5 text-red-400 hover:bg-red-500/10 rounded-md hidden transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2"/></svg></button>
+                </div>
+                
+                <div id="properties-panel" class="flex-1 overflow-y-auto p-5 space-y-6">
+                    <div id="panel-canvas" class="space-y-6">
+                        <section>
+                            <label class="text-[10px] text-slate-500 mb-2 block uppercase">캔버스 배경</label>
+                            <div class="flex items-center gap-3"><input type="color" id="canvas-bg-color" value="#0f172a" class="bg-transparent"><input type="text" id="canvas-bg-hex" value="#0F172A" class="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-300 outline-none"></div>
+                        </section>
+                        <section>
+                            <label class="text-[10px] text-slate-500 mb-2 block uppercase">기본 도형 추가</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button onclick="addShapeToCanvas('rect')" class="aspect-square bg-white/5 rounded-xl hover:text-violet-400 transition flex justify-center items-center text-slate-400"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg></button>
+                                <button onclick="addShapeToCanvas('circle')" class="aspect-square bg-white/5 rounded-xl hover:text-violet-400 transition flex justify-center items-center text-slate-400"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle></svg></button>
+                                <button onclick="addShapeToCanvas('triangle')" class="aspect-square bg-white/5 rounded-xl hover:text-violet-400 transition flex justify-center items-center text-slate-400"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4l8 14H4l8-14z"></path></svg></button>
+                                <button onclick="addShapeToCanvas('star')" class="aspect-square bg-white/5 rounded-xl hover:text-violet-400 transition flex justify-center items-center text-slate-400"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg></button>
+                                <button onclick="addShapeToCanvas('hexagon')" class="aspect-square bg-white/5 rounded-xl hover:text-violet-400 transition flex justify-center items-center text-slate-400"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l8.66 5v10L12 22l-8.66-5V7L12 2z"></path></svg></button>
+                                <button onclick="addShapeToCanvas('diamond')" class="aspect-square bg-white/5 rounded-xl hover:text-violet-400 transition flex justify-center items-center text-slate-400"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l9 10-9 10-9-10 9-10z"></path></svg></button>
+                            </div>
+                        </section>
+                        <section>
+                            <label class="text-[10px] text-slate-500 block uppercase mb-2">자유 그리기 설정</label>
+                            <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer bg-white/5 p-2 rounded-lg border border-white/5 hover:bg-white/10 transition">
+                                <input type="checkbox" id="keep-raw-draw" class="accent-violet-500 w-4 h-4" checked> <span>원본 곡선 유지 (해제 시 AI 자동 보정)</span>
+                            </label>
+                        </section>
+                    </div>
+
+                    <div id="panel-element" class="hidden space-y-6">
+                        <section id="prop-section-text" class="hidden">
+                            <label class="text-[10px] text-violet-400 block uppercase mb-2">텍스트 옵션</label>
+                            <textarea id="prop-text-content" rows="2" class="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white mb-2 outline-none focus:border-violet-500"></textarea>
+                            <select id="prop-font-family" class="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-slate-300 mb-2 outline-none focus:border-violet-500"></select>
+                            <div class="flex justify-between items-center"><span class="text-[10px] text-slate-500">폰트 크기</span><input type="number" id="prop-font-size" class="w-16 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-violet-500"></div>
+                        </section>
+
+                        <section>
+                            <label class="text-[10px] text-slate-500 block uppercase mb-2">스타일</label>
+                            <div class="flex items-center gap-3 mb-3"><input type="color" id="shape-color" class="bg-transparent"><input type="text" id="color-hex" class="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-slate-300 outline-none focus:border-violet-500"></div>
+                            <div class="flex items-center gap-3"><input type="color" id="prop-stroke-color" class="bg-transparent"><span class="text-[10px] text-slate-500">선 두께</span><input type="number" id="prop-stroke-width" min="0" class="w-12 bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-white outline-none focus:border-violet-500"></div>
+                        </section>
+
+                        <section>
+                            <div class="space-y-3">
+                                <div><div class="flex justify-between text-[10px] text-slate-500 mb-1"><span>투명도</span><span id="opacity-val">100%</span></div><input type="range" id="prop-opacity" min="0" max="1" step="0.01" value="1" class="w-full"></div>
+                                <div><div class="flex justify-between text-[10px] text-slate-500 mb-1"><span>회전 각도</span><span id="rotation-val">0°</span></div><input type="range" id="prop-rotation" min="0" max="360" step="1" value="0" class="w-full"></div>
+                            </div>
+                        </section>
+
+                        <section>
+                            <label class="text-[10px] text-slate-500 block uppercase mb-2">레이어 정렬</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="moveLayer('up')" class="py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold text-slate-300 border border-white/5 transition">앞으로</button>
+                                <button onclick="moveLayer('down')" class="py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-bold text-slate-300 border border-white/5 transition">뒤로</button>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                
+                <div class="h-48 border-t border-white/5 flex flex-col bg-white/5">
+                    <div class="px-4 py-2 flex justify-between items-center border-b border-white/5"><span class="text-[10px] text-slate-400 font-bold">레이어 목록</span><span id="layer-count" class="text-[10px] text-violet-400 font-bold">0</span></div>
+                    <div id="layer-list" class="flex-1 overflow-y-auto"></div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         모달 창 모음
+    ========================================== -->
+
+    <!-- OS 기반 파일 탐색기 (드래그 가능, 윈도우 스타일) -->
+    <div id="os-storage-modal" class="auth-modal-overlay" onclick="closeOSModal()">
+        <div class="os-window" id="os-window" onclick="event.stopPropagation()">
+            <div class="os-titlebar" id="os-titlebar">
+                <div class="os-title text-slate-300 font-bold text-sm" id="os-modal-title">LAGO PRO 2D 파일 관리</div>
+                <div class="os-close-btn" onclick="confirmCloseOSModal()">✕</div>
+            </div>
+            <div class="os-body">
+                <div class="os-sidebar">
+                    <div class="os-sidebar-title">네트워크</div>
+                    <div class="os-sidebar-item active" id="sidebar-cloud" onclick="changeOSLocation('cloud')">☁️ 클라우드 저장소</div>
+                    <div class="os-sidebar-title mt-4">출력 및 다운로드</div>
+                    <div class="os-sidebar-item text-emerald-400" id="sidebar-export-json" onclick="changeOSLocation('export-json')">💾 데이터 백업 (.json)</div>
+                    <div class="os-sidebar-item text-pink-400" id="sidebar-export-image" onclick="changeOSLocation('export-image')">🖼️ 이미지 추출 (.png)</div>
+                    <div class="os-sidebar-item text-indigo-400" id="sidebar-export-multi" onclick="changeOSLocation('export-multi')">📚 ZIP 연속 다운로드</div>
+                    <div class="os-sidebar-item text-orange-400" id="sidebar-export-doc" onclick="changeOSLocation('export-doc')">📄 문서 변환 (.pdf)</div>
+                    <div class="os-sidebar-item text-slate-300" id="sidebar-export-print" onclick="printCanvasDocument()">🖨️ 프린트 (인쇄)</div>
+                </div>
+                
+                <div class="os-content flex flex-col h-full relative">
+                    <!-- 클라우드 뷰 -->
+                    <div id="view-os-cloud" class="flex-1 flex flex-col hidden">
+                        <div class="os-file-grid flex-1" id="os-file-grid"></div>
+                        <div class="os-footer flex flex-wrap gap-2 mt-4 border-t border-white/10 pt-4 items-end" id="os-footer-area">
+                            <div class="flex-1 min-w-[200px] flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">클라우드 파일명 지정</label>
+                                <div class="flex items-center bg-[#1e1e24] border border-[#444] rounded-lg px-2 focus-within:border-brand-primary transition">
+                                    <input type="text" id="os-file-name-c" class="bg-transparent text-white p-2 flex-1 outline-none text-[13px]" placeholder="이름 입력">
+                                    <span class="text-slate-400 font-bold px-1">.</span>
+                                    <input type="text" class="bg-transparent text-emerald-400 p-2 w-12 outline-none text-[13px] font-mono lowercase font-bold" value="json" disabled>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2 items-end">
+                                <button onclick="document.getElementById('cloud-project-upload').click()" class="os-btn bg-emerald-600/30 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-600/50 transition">PC 파일 업로드</button>
+                                <button id="btn-cloud-rename" onclick="renameCloudProjectAction(event)" class="hidden os-btn bg-blue-600/30 text-blue-400 border border-blue-500/50 hover:bg-blue-600/50 transition">이름 변경</button>
+                                <button id="btn-cloud-overwrite" onclick="showConfirmModal('클라우드 덮어쓰기', '이 파일을 현재 캔버스 내용으로 덮어쓰시겠습니까?', executeCloudOverwrite)" class="hidden os-btn bg-amber-600/30 text-amber-400 border border-amber-500/50 hover:bg-amber-600/50 transition">덮어쓰기</button>
+                                <button class="os-btn os-btn-primary" id="os-action-btn-c" onclick="executeOSStorageAction()">실행</button>
+                            </div>
+                        </div>
+                        <input type="file" id="cloud-project-upload" accept=".json" class="hidden" onchange="handleCloudProjectUploadAction(event)">
+                    </div>
+
+                    <!-- 내보내기 뷰 (통합) -->
+                    <div id="view-os-export" class="flex-1 flex flex-col hidden justify-center items-center px-4 text-center relative">
+                        <div id="export-icon" class="text-5xl mb-4">🖼️</div>
+                        <h3 id="export-title" class="text-white text-lg font-bold mb-2">기능 이름</h3>
+                        <p id="export-desc" class="text-slate-400 text-sm mb-6">설명 영역입니다.</p>
+                        
+                        <!-- ZIP 다중 다운로드 옵션 -->
+                        <div id="export-zip-options" class="w-full max-w-sm mb-6 hidden bg-black/30 p-4 rounded-xl border border-white/5">
+                            <label class="text-xs text-slate-300 block mb-2 font-bold text-left">다운로드할 탭 선택</label>
+                            <div id="multi-export-list" class="max-h-32 overflow-y-auto mb-4 space-y-1 pr-2 text-left"></div>
+                            
+                            <label class="text-xs text-slate-300 font-bold block mb-2 text-left">압축 형식 (가상)</label>
+                            <select id="multi-ext-sel" class="w-full bg-[#1e1e24] text-white p-2 rounded border border-[#444] mb-4 text-xs outline-none">
+                                <option value="zip">표준 ZIP (.zip)</option>
+                                <option value="7z">고효율 7-Zip (.7z) - 서버 전용</option>
+                                <option value="pw">암호화 ZIP (.zip) - 서버 전용</option>
+                            </select>
+                            <div id="pw-input-area" class="hidden mb-4"><input type="password" id="zip-pw" class="w-full bg-[#1e1e24] text-white p-2 rounded border border-[#444] text-xs outline-none" placeholder="비밀번호 입력"></div>
+                            
+                            <label class="text-xs text-slate-300 block mb-2 font-bold text-left">이미지 압축 품질 (Quality)</label>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] text-slate-500">저용량</span>
+                                <input type="range" id="zip-quality" min="0.1" max="1.0" step="0.1" value="0.8" class="flex-1 accent-indigo-500" oninput="document.getElementById('zip-q-val').innerText=Math.round(this.value*100)+'%'">
+                                <span class="text-[10px] text-slate-500">고품질</span>
+                            </div>
+                            <div class="text-right text-xs text-indigo-400 font-bold mt-1" id="zip-q-val">80%</div>
+                            <p class="text-[9px] text-slate-500 mt-2 text-left">* 브라우저 환경 제약으로 암호화 및 7z 압축은 무시되고 일반 ZIP으로 생성됩니다.</p>
+                        </div>
+
+                        <div class="flex flex-col w-full max-w-sm mb-6 text-left gap-1">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase px-1">저장할 파일명 및 확장자</label>
+                            <div class="flex items-center bg-[#1e1e24] border border-[#444] rounded-lg px-2 focus-within:border-brand-primary transition w-full">
+                                <input type="text" id="os-file-name-e" class="bg-transparent text-white p-2 flex-1 outline-none text-[13px]" placeholder="파일명 입력">
+                                <span class="text-slate-400 font-bold px-1">.</span>
+                                <input type="text" id="os-file-ext-e" class="bg-transparent text-brand-primary p-2 w-16 outline-none text-[13px] font-mono lowercase font-bold" placeholder="ext" value="png" oninput="this.value=this.value.replace(/[^a-zA-Z]/g,'').toLowerCase()">
+                            </div>
+                        </div>
+                        
+                        <button class="os-btn os-btn-primary w-full max-w-sm shadow-lg shadow-violet-500/20" id="os-action-btn-e" onclick="executeOSStorageAction()">내보내기 실행</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 프로필/계정 관리 모달 -->
+    <div id="profile-modal" class="auth-modal-overlay" onclick="closeModal('profile-modal')">
+        <div class="auth-modal-content w-full max-w-sm p-8" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold mb-6 text-white text-center">내 계정 정보</h3>
+            
+            <div class="flex flex-col items-center mb-6">
+                <div class="relative w-20 h-20 mb-2 cursor-pointer group" onclick="document.getElementById('profile-pic-upload').click()">
+                    <img id="profile-avatar-large" src="" alt="Profile" class="w-full h-full rounded-full object-cover shadow-lg border-4 border-white/10 hidden">
+                    <div id="profile-avatar-fallback-large" class="w-full h-full bg-gradient-to-tr from-violet-500 to-pink-500 rounded-full flex items-center justify-center font-bold text-white text-3xl shadow-lg border-4 border-white/10">U</div>
+                    <div class="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                        <span class="text-xs font-bold text-white">변경</span>
+                    </div>
+                </div>
+                <input type="file" id="profile-pic-upload" accept="image/*" class="hidden" onchange="uploadProfilePicAction(event)">
+                <button onclick="resetProfilePicAction()" class="text-[10px] text-slate-400 hover:text-red-400 transition underline">기본 사진으로 변경</button>
+            </div>
+
+            <div class="profile-info-box">
+                <div class="profile-label">이름 (아이디)</div>
+                <div class="profile-value" id="profile-display-name">USER</div>
+            </div>
+            <div class="profile-info-box">
+                <div class="profile-label">멤버십 상태</div>
+                <div class="profile-value text-emerald-400 flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>LAGO PRO 구독 중
+                </div>
+            </div>
+            
+            <div class="profile-info-box mt-4 border-violet-500/30 bg-violet-500/10">
+                <div class="profile-label text-violet-400">비밀번호 확인</div>
+                <p id="pw-view-time-text" class="text-[10px] text-slate-400 mb-2">5초간 열람 후 자동으로 숨겨집니다.</p>
+                <div class="flex gap-2 mt-1">
+                    <input type="password" id="profile-pw-verify" class="os-input flex-1" placeholder="비밀번호 재입력">
+                    <button id="profile-pw-btn" onclick="verifyAndShowPasswordAction()" class="px-4 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-bold text-xs transition">열람</button>
+                </div>
+                <div id="profile-pw-result" class="mt-3 text-sm text-white font-mono font-bold hidden text-center bg-black/40 py-2 rounded-lg border border-white/10 transition"></div>
+            </div>
+
+            <!-- 관리자 전용 메뉴 -->
+            <div id="admin-tools-area" class="hidden mt-6 pt-4 border-t border-white/10 text-center">
+                <p class="text-[11px] text-slate-400 font-bold mb-3">🛠 관리자 전용 제어</p>
+                <div class="bg-black/30 p-3 rounded-lg border border-white/5 text-left mb-2">
+                    <label class="flex items-center justify-between cursor-pointer hover:bg-white/5 transition mb-2 text-sm text-white">
+                        <span>3D 스튜디오 접속 활성화</span>
+                        <input type="checkbox" id="admin-toggle-3d" class="accent-blue-500 w-4 h-4" onchange="toggleStudioStateAction('3d', this.checked)">
+                    </label>
+                    <label class="text-[10px] text-slate-400 block mb-1 mt-3">3D 스튜디오 접속 링크</label>
+                    <input type="text" id="admin-url-3d" class="os-input w-full mb-2 text-xs" placeholder="기본: https://ramalok3846.github.io/lagopro3D/v2.html">
+                    <label class="text-[10px] text-slate-400 block mb-1 mt-3">비밀번호 열람 시간 (초)</label>
+                    <input type="number" id="admin-pw-time" class="os-input w-full mb-2 text-xs" placeholder="기본: 5">
+                    <button onclick="saveAdminSettingsAction()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition mt-2">설정 저장</button>
+                </div>
+                <button onclick="openAdminLinksModalAction()" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-bold transition border border-slate-500 mt-2">커스텀 링크 / 확장자 관리</button>
+            </div>
+
+            <button onclick="closeModal('profile-modal')" class="w-full py-3 mt-6 bg-white/10 rounded-xl font-bold text-white transition hover:bg-white/20">닫기</button>
+        </div>
+    </div>
+
+    <!-- 확장자/커스텀 링크 관리 모달 -->
+    <div id="admin-links-modal" class="auth-modal-overlay" onclick="closeModal('admin-links-modal')">
+        <div class="auth-modal-content w-full max-w-lg p-8" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold mb-4 text-white">커스텀 스튜디오 링크 추가</h3>
+            <div class="bg-black/30 p-4 rounded-xl border border-white/10 mb-4">
+                <input type="hidden" id="custom-link-id">
+                <input type="text" id="custom-link-title" class="os-input w-full mb-2 text-sm" placeholder="스튜디오/링크 이름 (예: LAGO Video)">
+                <input type="text" id="custom-link-desc" class="os-input w-full mb-2 text-sm" placeholder="간단한 설명">
+                <input type="text" id="custom-link-url" class="os-input w-full mb-2 text-sm" placeholder="연결 URL (https://...)">
+                <button onclick="saveCustomLinkAction()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold transition mt-1 text-sm">저장 / 추가하기</button>
+            </div>
+            <div id="admin-links-list" class="max-h-32 overflow-y-auto space-y-2 mb-6"></div>
+
+            <h4 class="text-sm font-bold mb-2 text-white border-t border-white/10 pt-4">시스템 허용 확장자 관리</h4>
+            <div class="bg-black/30 p-4 rounded-xl border border-white/10 mb-4">
+                <input type="text" id="ext-add-input" class="os-input w-full mb-2 text-sm" placeholder="추가할 확장자 입력 (예: psd, html)">
+                <button onclick="addSysExtAction()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition text-sm">확장자 추가</button>
+            </div>
+            <div id="admin-ext-list" class="max-h-32 overflow-y-auto space-y-2"></div>
+
+            <button onclick="closeModal('admin-links-modal')" class="w-full py-3 mt-4 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition">닫기</button>
+        </div>
+    </div>
+
+    <!-- 폰트 매니저 모달 -->
+    <div id="font-manager-modal" class="auth-modal-overlay" onclick="closeModal('font-manager-modal')">
+        <div class="auth-modal-content w-full max-w-lg p-8" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold mb-2 text-white">커스텀 폰트 저장소</h3>
+            <p class="text-[11px] text-slate-400 mb-6 leading-relaxed text-center">
+                권한 오류 방지를 위해 폰트(.ttf)를 직접 끌어다 놓으세요.<br>
+                <span class="text-pink-400 font-bold">[Win + R]</span> 누르고 <span class="text-white font-mono bg-white/10 px-1 rounded">fonts</span> 검색 후 직접 드롭!
+            </p>
+            <div id="font-dropzone" class="font-dropzone mb-6"><div class="text-slate-300 font-bold">여기에 .ttf 드롭</div></div>
+            <div id="font-list-area" class="max-h-40 overflow-y-auto space-y-2 mb-4 text-white"></div>
+            <button onclick="closeModal('font-manager-modal')" class="w-full py-3 bg-white/10 rounded-xl font-bold text-white transition hover:bg-white/20">닫기</button>
+        </div>
+    </div>
+
+    <!-- AI 이미지 모달 -->
+    <div id="image-search-modal" class="auth-modal-overlay" onclick="closeModal('image-search-modal')">
+        <div class="auth-modal-content w-full max-w-2xl p-6" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold mb-4 text-white">AI 온라인 이미지 자동 번역 생성</h3>
+            <p class="text-[11px] text-slate-400 mb-4">키워드를 한국어 또는 영어로 입력하면 자동 번역되어 AI 이미지가 생성됩니다.</p>
+            <div class="flex gap-2 mb-6">
+                <input type="text" id="image-search-query" class="flex-1 os-input" placeholder="예: 사이버펑크 도시, 귀여운 고양이..." onkeypress="if(event.keyCode===13) executeImageSearchAction()">
+                <button onclick="executeImageSearchAction()" class="px-6 bg-emerald-600 rounded-xl font-bold text-white hover:bg-emerald-500 transition shadow-lg">생성하기</button>
+            </div>
+            <div id="image-results-grid" class="grid grid-cols-2 gap-4 max-h-[350px] overflow-y-auto text-slate-400 text-sm text-center"></div>
+            <button onclick="closeModal('image-search-modal')" class="w-full mt-4 py-3 bg-white/10 rounded-xl font-bold text-white transition hover:bg-white/20">닫기</button>
+        </div>
+    </div>
+
+    <!-- 이름 모달, 알림 모달, 환영 모달 -->
+    <div id="name-modal" class="auth-modal-overlay" onclick="closeModal('name-modal')">
+        <div class="auth-modal-content" onclick="event.stopPropagation()">
+            <h3 class="text-center mb-4 font-bold text-white text-lg">이름 선택</h3>
+            <div id="name-grid" class="auth-name-grid"></div>
+            <div id="admin-login-area" class="mt-4 flex justify-center"></div>
+            <button class="auth-sub-btn mt-4" onclick="closeModal('name-modal')">닫기</button>
+        </div>
+    </div>
+
+    <div id="alert-modal" class="auth-modal-overlay" onclick="closeModal('alert-modal')" style="z-index: 999999;">
+        <div class="auth-modal-content" style="text-align:center;" onclick="event.stopPropagation()">
+            <h3 id="alert-title" style="margin-bottom:15px; margin-top:0; font-weight: 800; font-size: 18px;">안내</h3>
+            <p id="alert-msg" style="color:#cbd5e1; font-size:14px; line-height:1.6; margin-bottom:25px; word-break:keep-all;"></p>
+            <button class="auth-action-btn" onclick="closeModal('alert-modal')">확인</button>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="auth-modal-overlay" style="z-index: 999999;">
+        <div class="auth-modal-content w-full max-w-sm p-6" style="text-align:center;" onclick="event.stopPropagation()">
+            <h3 id="confirm-title" style="margin-bottom:15px; margin-top:0; font-weight: 800; font-size: 18px; color: #ef4444;">확인</h3>
+            <p id="confirm-msg" style="color:#cbd5e1; font-size:14px; line-height:1.6; margin-bottom:25px; word-break:keep-all;"></p>
+            <div class="flex gap-2">
+                <button class="os-btn bg-slate-600 hover:bg-slate-500 flex-1 text-white transition" onclick="closeModal('confirm-modal')">취소</button>
+                <button class="os-btn bg-red-600 hover:bg-red-500 flex-1 text-white transition" id="confirm-action-btn">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="welcome-modal" class="auth-modal-overlay" style="z-index: 100000;">
+        <div class="auth-modal-content text-center p-10 border border-white/20 bg-gray-900 shadow-2xl shadow-purple-500/20">
+            <div class="text-6xl mb-6 animate-bounce">🎉</div>
+            <h2 id="welcome-title" class="text-xl font-black mb-6 leading-snug text-white">환영합니다!</h2>
+            <button onclick="closeWelcomeModalAction()" class="w-full py-4 bg-gradient-to-r from-violet-600 to-pink-600 text-white font-bold rounded-xl mb-4 hover:opacity-90 transition shadow-lg shadow-violet-500/30">대시보드 시작</button>
+            <label class="flex items-center justify-center gap-2 cursor-pointer text-sm text-slate-400">
+                <input type="checkbox" id="hide-welcome-cb" class="accent-violet-500 w-4 h-4">
+                <span>다시 보지 않기</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 자바스크립트 통합 (안전한 스코프, 끊김 방지) -->
+    <!-- ========================================== -->
+    <script>
+        /* === 1. 공통 유틸리티 === */
+        function switchView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            const targetView = document.getElementById(viewId);
+            if(targetView) targetView.classList.add('active');
+        }
+        function closeModal(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('active');
+        }
+        function showAuthAlert(title, msgHtml, isDanger = true) {
+            const titleEl = document.getElementById('alert-title');
+            if(titleEl) { titleEl.innerHTML = title; titleEl.style.color = isDanger ? "#ef4444" : "#a855f7"; }
+            const msgEl = document.getElementById('alert-msg');
+            if(msgEl) msgEl.innerHTML = msgHtml;
+            const modalEl = document.getElementById('alert-modal');
+            if(modalEl) modalEl.classList.add('active');
+        }
+        function showConfirmModal(title, msgHtml, onConfirmCallback) {
+            const titleEl = document.getElementById('confirm-title');
+            if(titleEl) titleEl.innerHTML = title;
+            const msgEl = document.getElementById('confirm-msg');
+            if(msgEl) msgEl.innerHTML = msgHtml;
+            const actionBtn = document.getElementById('confirm-action-btn');
+            if(actionBtn) {
+                actionBtn.onclick = () => {
+                    closeModal('confirm-modal');
+                    if(typeof onConfirmCallback === 'function') onConfirmCallback();
+                };
+            }
+            const modalEl = document.getElementById('confirm-modal');
+            if(modalEl) modalEl.classList.add('active');
+        }
+
+        /* === 2. 전역 변수 및 Firebase === */
+        window.allowedExts = ['png', 'jpg', 'jpeg', 'webp', 'pdf', 'html', 'json'];
+        const firebaseConfig = { databaseURL: "https://class-chat-6-7-default-rtdb.asia-southeast1.firebasedatabase.app/" };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const students = {"강유주":"6701","고윤서":"6702","공윤호":"6703","김성민":"6704","김태윤":"6705","나현웅":"6706","류찬혁":"6707","문예린":"6708","박소율":"6709","박채윤":"6710","배예람":"6711","백한율":"6712","우은서":"6713","우진서":"6714","윤소영":"6715","임소윤":"6716","임수현":"6717","정시후":"6718","조수빈":"6719","최리한":"6720","최은수":"6721","최준성":"6722","하예준":"6723","허단":"6724"};
+        let selLoginName = "";
+        let isAnimating = false;
+        let pwViewTime = 5000;
+        let projects = [{ id: 1, name: '새_디자인_1', shapes: [], bgC: '#0f172a' }];
+        let activeProjId = 1;
+
+        /* === 3. 시계 초기화 및 조작 (크기 조절) === */
+        function getFormattedTime() {
+            const d = new Date();
+            const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+            const week = ['일', '월', '화', '수', '목', '금', '토'];
+            const weekDay = week[d.getDay()] + '요일';
+            let h = d.getHours(); const ampm = h >= 12 ? '오후' : '오전'; h = h % 12 || 12;
+            const hStr = String(h).padStart(2, '0'), min = String(d.getMinutes()).padStart(2, '0'), s = String(d.getSeconds()).padStart(2, '0');
+            return `${y}년 ${m}월 ${day}일 ${weekDay} ${ampm} ${hStr}시 ${min}분 ${s}초`;
+        }
+
+        let clockHandleTimer = null;
+        let currentClockScale = 1;
+
+        function showClockHandles() {
+            const clockEl = document.getElementById('global-clock');
+            if(!clockEl || clockEl.classList.contains('in-editor')) return;
+            clockEl.classList.add('show-handles');
+            if(clockHandleTimer) clearTimeout(clockHandleTimer);
+            clockHandleTimer = setTimeout(() => {
+                clockEl.classList.remove('show-handles');
+            }, 3000);
+        }
+
+        function startClockResize(e, corner) {
+            e.stopPropagation(); // 드래그 이벤트 전파 방지
+            const clockEl = document.getElementById('global-clock');
+            if(!clockEl) return;
+            let startY = e.touches ? e.touches[0].clientY : e.clientY;
+            let initialScale = currentClockScale;
+
+            const onResizeMove = (ev) => {
+                ev.preventDefault();
+                let currentY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+                let deltaY = currentY - startY;
+                
+                // 크기 계산 (위로 드래그하면 커지고 아래로 하면 작아짐)
+                let newScale = initialScale - (deltaY * 0.01);
+                newScale = Math.max(0.5, Math.min(newScale, 2.5)); // 0.5배 ~ 2.5배 제한
+                currentClockScale = newScale;
+                
+                // 직접 폰트 및 패딩 조절
+                clockEl.style.fontSize = (13 * newScale) + 'px';
+                clockEl.style.padding = `${10 * newScale}px ${24 * newScale}px`;
+            };
+
+            const onResizeEnd = () => {
+                window.removeEventListener('mousemove', onResizeMove);
+                window.removeEventListener('touchmove', onResizeMove);
+                window.removeEventListener('mouseup', onResizeEnd);
+                window.removeEventListener('touchend', onResizeEnd);
+            };
+
+            window.addEventListener('mousemove', onResizeMove, {passive: false});
+            window.addEventListener('touchmove', onResizeMove, {passive: false});
+            window.addEventListener('mouseup', onResizeEnd);
+            window.addEventListener('touchend', onResizeEnd);
+        }
+
+        function initClock() {
+            const clockEl = document.getElementById('global-clock');
+            const clockText = document.getElementById('clock-text');
+            if(!clockEl || !clockText) return;
+            
+            clockText.innerText = getFormattedTime();
+            setInterval(() => { clockText.innerText = getFormattedTime(); }, 1000);
+
+            let isDragClock = false, oX, oY;
+            const startDrag = (e) => {
+                if(e.target.classList.contains('clock-resize-handle')) return; // 핸들 클릭 시 예외
+                isDragClock = true;
+                const p = e.touches ? e.touches[0] : e;
+                const rect = clockEl.getBoundingClientRect();
+                clockEl.style.transform = 'none';
+                clockEl.style.left = rect.left + 'px';
+                clockEl.style.top = rect.top + 'px';
+                clockEl.style.bottom = 'auto';
+                clockEl.style.right = 'auto';
+                oX = p.clientX - rect.left;
+                oY = p.clientY - rect.top;
+                clockEl.style.transition = 'none';
+            };
+            const doDrag = (e) => {
+                if(!isDragClock) return;
+                e.preventDefault();
+                const p = e.touches ? e.touches[0] : e;
+                let nx = p.clientX - oX;
+                let ny = p.clientY - oY;
+                const rect = clockEl.getBoundingClientRect();
+                nx = Math.max(0, Math.min(nx, window.innerWidth - rect.width));
+                ny = Math.max(0, Math.min(ny, window.innerHeight - rect.height));
+                clockEl.style.left = nx + 'px';
+                clockEl.style.top = ny + 'px';
+            };
+            const endDrag = () => {
+                if(isDragClock) clockEl.style.transition = 'font-size 0.3s, padding 0.3s, border-radius 0.3s, background-color 0.3s';
+                isDragClock = false;
+            };
+
+            clockEl.addEventListener('mousedown', startDrag);
+            clockEl.addEventListener('touchstart', startDrag, {passive: false});
+            window.addEventListener('mousemove', doDrag, {passive: false});
+            window.addEventListener('touchmove', doDrag, {passive: false});
+            window.addEventListener('mouseup', endDrag);
+            window.addEventListener('touchend', endDrag);
+        }
+
+        // 즉시 실행하여 로딩 문구 제거
+        document.addEventListener('DOMContentLoaded', initClock);
+
+        /* === 4. 로그인 및 권한 관리 === */
+        function openNameModal() {
+            const grid = document.getElementById('name-grid');
+            if(!grid) return;
+            grid.innerHTML = "";
+            Object.keys(students).forEach(name => {
+                const btn = document.createElement('button');
+                btn.className = "auth-name-btn";
+                btn.innerText = name;
+                btn.onclick = () => {
+                    selLoginName = name;
+                    const lnt = document.getElementById('login-name-text');
+                    if(lnt) { lnt.innerText = name; lnt.style.color = "#fff"; }
+                    closeModal('name-modal');
+                };
+                grid.appendChild(btn);
+            });
+            const adminArea = document.getElementById('admin-login-area');
+            if(adminArea) {
+                adminArea.innerHTML = "";
+                const ab = document.createElement('button');
+                ab.className = "auth-name-btn auth-admin-btn";
+                ab.innerText = "관리자";
+                ab.onclick = () => {
+                    selLoginName = "관리자";
+                    const lnt = document.getElementById('login-name-text');
+                    if(lnt) { lnt.innerText = "관리자"; lnt.style.color = "#fff"; }
+                    closeModal('name-modal');
+                };
+                adminArea.appendChild(ab);
+            }
+            document.getElementById('name-modal').classList.add('active');
+        }
+
+        function updateProfilePicUI(url) {
+            const avatarImg = document.getElementById('dash-avatar');
+            const avatarFallback = document.getElementById('dash-avatar-fallback');
+            const profModalImg = document.getElementById('profile-avatar-large');
+            const profModalFallback = document.getElementById('profile-avatar-fallback-large');
+            
+            if(url && (url.startsWith('http') || url.startsWith('data:image'))) {
+                if(avatarImg) { avatarImg.src = url; avatarImg.style.display = 'block'; }
+                if(avatarFallback) avatarFallback.style.display = 'none';
+                if(profModalImg) { profModalImg.src = url; profModalImg.style.display = 'block'; }
+                if(profModalFallback) profModalFallback.style.display = 'none';
+            } else {
+                const firstLet = selLoginName ? selLoginName.substring(0,1) : 'U';
+                if(avatarImg) avatarImg.style.display = 'none';
+                if(avatarFallback) { avatarFallback.innerText = firstLet; avatarFallback.style.display = 'flex'; }
+                if(profModalImg) profModalImg.style.display = 'none';
+                if(profModalFallback) { profModalFallback.innerText = firstLet; profModalFallback.style.display = 'flex'; }
+            }
+        }
+
+        async function processLogin() {
+            if(!selLoginName) return showAuthAlert("접속 오류", "사용자를 선택해주세요.");
+            const pwInput = document.getElementById('loginPw').value;
+            try {
+                const snap = await db.ref('profiles/' + selLoginName).once('value');
+                const data = snap.val();
+                let finalPw = (selLoginName === '관리자') ? (data?.pw || '1234') : (data?.pw || students[selLoginName]);
+                
+                if(pwInput !== finalPw) return showAuthAlert("인증 실패", "비밀번호가 일치하지 않습니다."); 
+                if (selLoginName !== '관리자' && data?.membership !== true) return showAuthAlert("접속 제한 🚫", "LAGO PRO 멤버십 권한이 없습니다.<br><a href='https://ramalok3846.github.io/LAGO/' target='_blank' style='color:#f472b6;'>일반 LAGO 접속하기 ➔</a>", true);
+                
+                let profilePicUrl = null;
+                if(data && (data.profile_image || data.photo || data.profilePic || data.img)) {
+                    profilePicUrl = data.profile_image || data.photo || data.profilePic || data.img;
+                }
+                updateProfilePicUI(profilePicUrl);
+                
+                switchView('dashboard-section'); 
+                
+                const userSpan = document.getElementById('dash-username');
+                if(userSpan) userSpan.innerText = selLoginName;
+                
+                const dashWelcome = document.getElementById('dash-welcome-msg');
+                if(dashWelcome) dashWelcome.innerHTML = `<span class="gradient-text-pro">${selLoginName}</span>님, 환영합니다!<br>나의 워크스페이스`;
+                
+                const welcomeTitle = document.getElementById('welcome-title');
+                if(welcomeTitle) welcomeTitle.innerHTML = `<span class="gradient-text-pro">${selLoginName}</span>님,<br>LAGO PRO에 오신 것을 환영합니다!`;
+                
+                if (!localStorage.getItem('hideLAGOProWelcome')) {
+                    const welcomeModal = document.getElementById('welcome-modal');
+                    if(welcomeModal) welcomeModal.classList.add('active');
+                }
+                
+                isAnimating = true;
+                initBg();
+                animateBg();
+                
+                setTimeout(() => {
+                    db.ref('lago_admin_exts').once('value').then(ss=>{if(ss.val()) allowedExts=ss.val();});
+                    loadAdminSettings();
+                    loadCustomLinksAction();
+                    loadUserFontsAction();
+                }, 300);
+            } catch(e) { 
+                showAuthAlert("통신 오류", "데이터베이스 연결에 실패했습니다."); 
+            }
+        }
+
+        function processLogout() {
+            switchView('login-section'); 
+            const lp = document.getElementById('loginPw'); if(lp) lp.value = ''; 
+            selLoginName = '';
+            const lnt = document.getElementById('login-name-text'); 
+            if(lnt) { lnt.innerText = '목록에서 선택'; lnt.style.color = '#64748b'; }
+            
+            isAnimating = false; 
+            const clockEl = document.getElementById('global-clock');
+            if(clockEl) {
+                clockEl.classList.remove('in-editor');
+                clockEl.style.transform = 'translateX(-50%)'; 
+                clockEl.style.left = '50%'; 
+                clockEl.style.top = '24px'; 
+                clockEl.style.bottom = 'auto'; 
+                clockEl.style.right = 'auto';
+            }
+        }
+
+        function closeWelcomeModalAction() {
+            const cb = document.getElementById('hide-welcome-cb');
+            if (cb && cb.checked) localStorage.setItem('hideLAGOProWelcome', 'true');
+            closeModal('welcome-modal');
+        }
+
+        function goToDashboard() {
+            switchView('dashboard-section'); 
+            isAnimating = true; 
+            initBg(); 
+            animateBg();
+            const clockEl = document.getElementById('global-clock');
+            if(clockEl) {
+                clockEl.classList.remove('in-editor');
+                clockEl.style.transform = 'translateX(-50%)'; 
+                clockEl.style.left = '50%'; 
+                clockEl.style.top = '24px'; 
+                clockEl.style.bottom = 'auto'; 
+                clockEl.style.right = 'auto';
+            }
+        }
+
+        function confirmPurpleTalk() {
+            showConfirmModal("외부 링크 이동", "PURPLE TALK(새 창)으로 이동하시겠습니까?", () => {
+                window.open('https://ramalok3846.github.io/class-chat-6-7/', '_blank');
+            });
+        }
+
+        /* === 5. 모달 및 내 정보 액션 === */
+        function openProfileModal() {
+            const pName = document.getElementById('profile-display-name');
+            if(pName) pName.innerText = selLoginName;
+            
+            const pwVerify = document.getElementById('profile-pw-verify');
+            if(pwVerify) { pwVerify.value = ''; pwVerify.disabled = false; }
+            
+            const verifyBtn = document.getElementById('profile-pw-btn');
+            if(verifyBtn) verifyBtn.disabled = false;
+
+            const pwResult = document.getElementById('profile-pw-result');
+            if(pwResult) pwResult.classList.add('hidden');
+            
+            const adminArea = document.getElementById('admin-tools-area');
+            if(adminArea) {
+                if(selLoginName === '관리자') adminArea.classList.remove('hidden');
+                else adminArea.classList.add('hidden');
+            }
+            document.getElementById('profile-modal').classList.add('active');
+        }
+
+        async function verifyAndShowPasswordAction() {
+            const inputPw = document.getElementById('profile-pw-verify').value;
+            if(!inputPw) return showAuthAlert("입력 오류", "확인을 위해 현재 비밀번호를 입력해주세요.");
+            try {
+                const snap = await db.ref('profiles/' + selLoginName).once('value'); 
+                const data = snap.val();
+                let realPw = (selLoginName === '관리자') ? (data?.pw || '1234') : (data?.pw || students[selLoginName]);
+                
+                if(inputPw === realPw) {
+                    const res = document.getElementById('profile-pw-result');
+                    const verifyInput = document.getElementById('profile-pw-verify');
+                    const verifyBtn = document.getElementById('profile-pw-btn');
+                    
+                    if(res) {
+                        res.innerText = `[ ${realPw} ]`;
+                        res.classList.remove('hidden');
+                        if(verifyInput) verifyInput.disabled = true;
+                        if(verifyBtn) verifyBtn.disabled = true;
+                        
+                        setTimeout(() => {
+                            res.classList.add('hidden');
+                            if(verifyInput) { verifyInput.disabled = false; verifyInput.value = ''; }
+                            if(verifyBtn) verifyBtn.disabled = false;
+                        }, pwViewTime);
+                    }
+                } else {
+                    showAuthAlert("인증 실패", "비밀번호가 일치하지 않아 열람할 수 없습니다.");
+                }
+            } catch(e) { showAuthAlert("오류", "데이터를 불러올 수 없습니다."); }
+        }
+
+        function uploadProfilePicAction(e) {
+            const f = e.target.files[0];
+            if(!f) return;
+            const r = new FileReader();
+            r.onload = ev => {
+                const img = new Image();
+                img.onload = async () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX = 200;
+                    let width = img.width, height = img.height;
+                    if(width > height) { if(width > MAX) { height *= MAX/width; width = MAX; } } 
+                    else { if(height > MAX) { width *= MAX/height; height = MAX; } }
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const b64 = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    try {
+                        await db.ref('profiles/' + selLoginName).update({ img: b64 });
+                        updateProfilePicUI(b64);
+                        showAuthAlert("성공", "프로필 사진이 변경되었습니다.", false);
+                    } catch(err) { showAuthAlert("오류", "프로필 변경 실패"); }
+                };
+                img.src = ev.target.result;
+            };
+            r.readAsDataURL(f);
+            e.target.value = '';
+        }
+
+        function resetProfilePicAction() {
+            showConfirmModal("프로필 사진 초기화", "기본 사진으로 되돌리시겠습니까?", async () => {
+                try {
+                    await db.ref('profiles/' + selLoginName).update({ img: null, photo: null, profile_image: null, profilePic: null });
+                    updateProfilePicUI(null);
+                    showAuthAlert("성공", "기본 프사로 설정되었습니다.", false);
+                } catch(e) { showAuthAlert("오류", "초기화 실패"); }
+            });
+        }
+
+        /* === 6. 관리자 설정 (3D 및 확장자) === */
+        async function loadAdminSettings() {
+            try {
+                const snap = await db.ref('lago_admin_settings').once('value');
+                const data = snap.val() || { enable_3d: true, url_3d: 'https://ramalok3846.github.io/lagopro3D/v2.html', pw_view_time: 5 };
+                
+                const toggle3D = document.getElementById('admin-toggle-3d');
+                if(toggle3D) toggle3D.checked = data.enable_3d;
+                
+                const url3D = document.getElementById('admin-url-3d');
+                if(url3D) url3D.value = data.url_3d || 'https://ramalok3846.github.io/lagopro3D/v2.html';
+
+                const pwTime = document.getElementById('admin-pw-time');
+                if(pwTime) pwTime.value = data.pw_view_time || 5;
+                pwViewTime = (data.pw_view_time || 5) * 1000;
+                
+                const pwText = document.getElementById('pw-view-time-text');
+                if(pwText) pwText.innerText = `${data.pw_view_time || 5}초간 열람 후 자동으로 숨겨집니다.`;
+                
+                const dim3D = document.getElementById('dim-3d');
+                if(dim3D) {
+                    if(data.enable_3d) {
+                        dim3D.classList.remove('flex'); dim3D.classList.add('hidden');
+                        dim3D.parentElement.style.pointerEvents = 'auto';
+                    } else { 
+                        dim3D.classList.add('flex'); dim3D.classList.remove('hidden'); 
+                        dim3D.parentElement.style.pointerEvents = 'none';
+                    }
+                }
+            } catch(e) {}
+        }
+
+        async function toggleStudioStateAction(type, isEnabled) {
+            if(selLoginName !== '관리자') return;
+            try {
+                if(type === '3d') {
+                    await db.ref('lago_admin_settings').update({ enable_3d: isEnabled });
+                    loadAdminSettings(); 
+                }
+            } catch(e) { showAuthAlert("오류", "상태 변경 실패"); }
+        }
+
+        async function saveAdminSettingsAction() {
+            if(selLoginName !== '관리자') return;
+            const toggle3D = document.getElementById('admin-toggle-3d');
+            const isEnabled = toggle3D ? toggle3D.checked : true;
+            const urlInput = document.getElementById('admin-url-3d');
+            const url3d = urlInput ? urlInput.value.trim() : 'https://ramalok3846.github.io/lagopro3D/v2.html';
+            const pwTimeInput = document.getElementById('admin-pw-time');
+            const pwTime = pwTimeInput ? parseInt(pwTimeInput.value) || 5 : 5;
+            
+            try {
+                await db.ref('lago_admin_settings').update({ enable_3d: isEnabled, url_3d: url3d, pw_view_time: pwTime });
+                showAuthAlert("성공", "관리자 설정이 저장되었습니다.", false);
+                loadAdminSettings();
+            } catch(e) {
+                showAuthAlert("오류", "설정 저장 실패");
+            }
+        }
+
+        async function checkAndOpen3D() {
+            try {
+                const snap = await db.ref('lago_admin_settings').once('value');
+                const data = snap.val() || { enable_3d: true, url_3d: 'https://ramalok3846.github.io/lagopro3D/v2.html' };
+                if(data.enable_3d || selLoginName === '관리자') {
+                    open3DEditor(data.url_3d);
+                } else {
+                    showAuthAlert("접속 차단", "현재 3D 스튜디오는 관리자에 의해 임시 비활성화되어 있습니다.");
+                }
+            } catch(e) { open3DEditor('https://ramalok3846.github.io/lagopro3D/v2.html'); }
+        }
+
+        async function open3DEditor(targetUrl = 'https://ramalok3846.github.io/lagopro3D/v2.html') {
+            if(!selLoginName) return showAuthAlert("오류", "로그인 정보가 없습니다.");
+            try {
+                const array = new Uint32Array(4);
+                window.crypto.getRandomValues(array);
+                const k = Array.from(array, d => d.toString(36)).join('');
+                await db.ref('lago_pro_3d_keys/' + selLoginName).set({ key: k, ts: firebase.database.ServerValue.TIMESTAMP });
+                localStorage.setItem('lago_pro_3d_name', selLoginName);
+                localStorage.setItem('lago_pro_3d_key', k);
+                window.open(targetUrl, '_blank');
+            } catch(e) { showAuthAlert("오류", "3D 인증 키 발급 실패"); }
+        }
+
+        /* 커스텀 링크 (관리자) */
+        function openAdminLinksModalAction() {
+            const id = document.getElementById('custom-link-id'); if(id) id.value = '';
+            const title = document.getElementById('custom-link-title'); if(title) title.value = '';
+            const desc = document.getElementById('custom-link-desc'); if(desc) desc.value = '';
+            const url = document.getElementById('custom-link-url'); if(url) url.value = '';
+            document.getElementById('admin-links-modal').classList.add('active');
+            renderAdminLinksListAction();
+            renderAdminExtListAction();
+        }
+
+        async function saveCustomLinkAction() {
+            const id = document.getElementById('custom-link-id').value;
+            const title = document.getElementById('custom-link-title').value.trim();
+            const desc = document.getElementById('custom-link-desc').value.trim();
+            const url = document.getElementById('custom-link-url').value.trim();
+            if(!title || !url) return showAuthAlert("알림", "이름과 URL은 필수입니다.");
+
+            const data = { title, desc, url, ts: firebase.database.ServerValue.TIMESTAMP };
+            try {
+                if(id) await db.ref('lago_admin_links/' + id).update(data);
+                else await db.ref('lago_admin_links').push(data);
+                
+                document.getElementById('custom-link-id').value = '';
+                document.getElementById('custom-link-title').value = '';
+                document.getElementById('custom-link-desc').value = '';
+                document.getElementById('custom-link-url').value = '';
+                
+                renderAdminLinksListAction();
+                loadCustomLinksAction();
+            } catch(e) { showAuthAlert("오류", "링크 저장 실패"); }
+        }
+
+        async function deleteCustomLinkAction(id) {
+            showConfirmModal("링크 삭제", "이 커스텀 링크를 영구 삭제하시겠습니까?", async () => {
+                await db.ref('lago_admin_links/' + id).remove();
+                renderAdminLinksListAction();
+                loadCustomLinksAction();
+            });
+        }
+
+        async function renderAdminLinksListAction() {
+            const list = document.getElementById('admin-links-list');
+            if(!list) return;
+            const snap = await db.ref('lago_admin_links').once('value');
+            const d = snap.val();
+            list.innerHTML = "";
+            if(d) {
+                Object.keys(d).forEach(k => {
+                    const item = d[k];
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center bg-black/30 p-3 rounded-lg border border-white/5";
+                    div.innerHTML = `
+                        <div class="text-left">
+                            <div class="text-white text-sm font-bold">${item.title}</div>
+                            <div class="text-slate-400 text-[10px] truncate max-w-[200px]">${item.url}</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="document.getElementById('custom-link-id').value='${k}'; document.getElementById('custom-link-title').value='${item.title}'; document.getElementById('custom-link-desc').value='${item.desc||''}'; document.getElementById('custom-link-url').value='${item.url}';" class="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded">편집</button>
+                            <button onclick="deleteCustomLinkAction('${k}')" class="text-xs px-2 py-1 bg-red-500/10 text-red-400 rounded">삭제</button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            }
+        }
+
+        async function loadCustomLinksAction() {
+            try {
+                const snap = await db.ref('lago_admin_links').once('value');
+                const data = snap.val();
+                document.querySelectorAll('.custom-dynamic-card').forEach(el => el.remove());
+                
+                if(data) {
+                    const grid = document.getElementById('dashboard-grid');
+                    if(!grid) return;
+                    Object.keys(data).forEach(k => {
+                        const link = data[k];
+                        const card = document.createElement('div');
+                        card.className = "glass-panel premium-card custom-dynamic-card rounded-3xl p-6 md:p-8 flex flex-col items-center text-center border-orange-500/20 hover:border-orange-500/50";
+                        card.onclick = () => {
+                            showConfirmModal("외부 링크 이동", `${link.title}(새 창)로 이동하시겠습니까?`, () => {
+                                window.open(link.url, '_blank');
+                            });
+                        };
+                        card.innerHTML = `
+                            <div class="w-12 h-12 bg-orange-600/20 rounded-2xl flex items-center justify-center mb-3 text-orange-400 group-hover:scale-110 transition-transform">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                            </div>
+                            <h3 class="text-lg font-bold text-white mb-2">${link.title}</h3>
+                            <p class="text-slate-400 text-xs mb-4 leading-relaxed hidden sm:block flex-1">${link.desc || '새로운 스튜디오 경험'}</p>
+                            <button class="w-full py-3 bg-gradient-to-r from-orange-600 to-amber-600 text-white rounded-xl font-bold shadow-lg shadow-orange-500/25 mt-auto text-sm group-hover:brightness-110 transition">입장하기</button>
+                        `;
+                        grid.appendChild(card);
+                    });
+                }
+            } catch(e) {}
+        }
+
+        async function renderAdminExtListAction() {
+            const list = document.getElementById('admin-ext-list');
+            if(!list) return;
+            list.innerHTML = "";
+            allowedExts.forEach((ex, i) => {
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center bg-black/30 p-2 rounded-lg border border-white/5";
+                div.innerHTML = `<span class="text-emerald-400 font-bold text-sm">.${ex}</span><button onclick="delSysExtAction(${i})" class="text-xs px-2 py-1 bg-red-500/10 text-red-400 rounded">삭제</button>`;
+                list.appendChild(div);
+            });
+        }
+
+        async function addSysExtAction() {
+            const input = document.getElementById('ext-add-input');
+            if(!input) return;
+            const v = input.value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            if(!v) return;
+            if(!allowedExts.includes(v)) {
+                allowedExts.push(v);
+                await db.ref('lago_admin_exts').set(allowedExts);
+                input.value = '';
+                renderAdminExtListAction();
+            }
+        }
+
+        async function delSysExtAction(idx) {
+            allowedExts.splice(idx, 1);
+            await db.ref('lago_admin_exts').set(allowedExts);
+            renderAdminExtListAction();
+        }
+
+        /* === 7. 폰트 관리 === */
+        function openFontManagerModal() {
+            document.getElementById('font-manager-modal').classList.add('active');
+            loadUserFontsAction();
+        }
+
+        const dropz = document.getElementById('font-dropzone');
+        if(dropz) {
+            dropz.ondragover = e => { e.preventDefault(); dropz.classList.add('dragover'); };
+            dropz.ondragleave = e => { e.preventDefault(); dropz.classList.remove('dragover'); };
+            dropz.ondrop = e => {
+                e.preventDefault(); dropz.classList.remove('dragover');
+                const f = e.dataTransfer.files[0];
+                if(f && f.name.toLowerCase().endsWith('.ttf')){
+                    const r = new FileReader();
+                    r.onload = async () => {
+                        const fn = f.name.replace('.ttf','').replace(/\s/g,'_');
+                        await db.ref(`lago_pro_fonts/${selLoginName}`).push({ name: fn, base64: r.result });
+                        try {
+                            const fo = new FontFace(fn, `url(${r.result})`);
+                            await fo.load();
+                            document.fonts.add(fo);
+                            const sel = document.getElementById('prop-font-family');
+                            if(sel) { const o=document.createElement('option'); o.value=fn; o.innerText=fn; sel.appendChild(o); }
+                            showAuthAlert("폰트 등록 완료", `[${fn}] 폰트가 성공적으로 등록되었습니다.`, false);
+                            loadUserFontsAction();
+                        } catch(err) { console.error(err); }
+                    };
+                    r.readAsDataURL(f);
+                } else {
+                    showAuthAlert("오류", ".ttf 파일만 드롭 가능합니다.");
+                }
+            };
+        }
+
+        async function loadUserFontsAction() {
+            try {
+                const snap = await db.ref(`lago_pro_fonts/${selLoginName}`).once('value');
+                const d = snap.val();
+                const sel = document.getElementById('prop-font-family');
+                if(sel) sel.innerHTML = "<option value='Inter'>Inter (기본)</option><option value='Pretendard'>Pretendard (한글)</option>";
+                
+                const list = document.getElementById('font-list-area');
+                if(list) list.innerHTML = "";
+
+                if(d) {
+                    Object.keys(d).forEach(async k => {
+                        const f = d[k];
+                        try {
+                            const fo = new FontFace(f.name, `url(${f.base64})`);
+                            await fo.load();
+                            document.fonts.add(fo);
+                            if(sel) { const o=document.createElement('option'); o.value=f.name; o.innerText=f.name; sel.appendChild(o); }
+                        } catch(e) {}
+
+                        if(list) {
+                            const div = document.createElement('div');
+                            div.className = "flex justify-between items-center bg-black/30 p-3 rounded-lg border border-white/5 mb-2";
+                            div.innerHTML = `<span class="text-white text-sm font-bold" style="font-family:'${f.name}'">${f.name}</span><button onclick="deleteFontAction('${k}')" class="text-xs px-2 py-1 bg-red-500/10 rounded text-red-400 hover:text-red-300 transition">삭제</button>`;
+                            list.appendChild(div);
+                        }
+                    });
+                } else {
+                    if(list) list.innerHTML = "<p class='text-slate-500 text-xs text-center py-4'>등록된 폰트가 없습니다.</p>";
+                }
+            } catch(e) {}
+        }
+
+        async function deleteFontAction(k) {
+            await db.ref(`lago_pro_fonts/${selLoginName}/${k}`).remove();
+            loadUserFontsAction();
+        }
+
+        /* === 8. 파티클 애니메이션 === */
+        let parts = [];
+        function initBg() {
+            const bgCanvas = document.getElementById('bg-canvas');
+            if(!bgCanvas) return;
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+            parts = [];
+            for(let i=0;i<40;i++) parts.push({x:Math.random()*bgCanvas.width, y:Math.random()*bgCanvas.height, s:Math.random()*2});
+        }
+
+        function animateBg() {
+            if(!isAnimating) return;
+            const bgCanvas = document.getElementById('bg-canvas');
+            if(!bgCanvas) return;
+            const bgCtx = bgCanvas.getContext('2d');
+            bgCtx.clearRect(0,0,bgCanvas.width,bgCanvas.height);
+            bgCtx.fillStyle="#fff";
+            parts.forEach(p => {
+                p.x += 0.3;
+                if(p.x > bgCanvas.width) p.x = 0;
+                bgCtx.globalAlpha = 0.3;
+                bgCtx.beginPath();
+                bgCtx.arc(p.x, p.y, p.s, 0, Math.PI*2);
+                bgCtx.fill();
+            });
+            requestAnimationFrame(animateBg);
+        }
+
+        /* === 9. 파일 관리자 (OS 모달) === */
+        let osLoc = 'cloud';
+        let osMode = 'save';
+        let osExpMode = 'image';
+        let osSelId = null;
+
+        function openOSModal(m) {
+            osMode = m;
+            const modal = document.getElementById('os-storage-modal');
+            if(modal) modal.classList.add('active');
+            changeOSLocationAction('cloud');
+            
+            const expItems = ['sidebar-export-img', 'sidebar-export-json', 'sidebar-export-multi', 'sidebar-export-doc', 'sidebar-export-print'];
+            expItems.forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.style.display = (m === 'save') ? 'flex' : 'none';
+            });
+            const expTitle = document.getElementById('sidebar-export-title');
+            if(expTitle) expTitle.style.display = (m === 'save') ? 'block' : 'none';
+            
+            const modalTitle = document.getElementById('os-modal-title');
+            if(modalTitle) modalTitle.innerText = (m === 'save') ? "LAGO PRO 2D 파일 관리 (저장)" : "LAGO PRO 2D 파일 관리 (열기)";
+        }
+
+        function confirmCloseOSModal() {
+            showConfirmModal("닫기 확인", "파일 관리 창을 닫으시겠습니까?", () => {
+                closeModal('os-storage-modal');
+            });
+        }
+
+        function changeOSLocationAction(l) {
+            osLoc = l;
+            osSelId = null;
+            document.querySelectorAll('.os-sidebar-item').forEach(e => e.classList.remove('active'));
+            const sideItem = document.getElementById('sidebar-'+l);
+            if(sideItem) sideItem.classList.add('active');
+            
+            const viewCloud = document.getElementById('view-os-cloud');
+            const viewExport = document.getElementById('view-os-export');
+            
+            if(l === 'cloud') {
+                if(viewExport) viewExport.classList.add('hidden');
+                if(viewCloud) viewCloud.classList.remove('hidden');
+                
+                const fileInputName = document.getElementById('os-file-name-c');
+                if(fileInputName) fileInputName.value = (osMode === 'save') ? activeProj().name : "";
+                
+                const bco = document.getElementById('btn-cloud-overwrite'); if(bco) bco.classList.add('hidden');
+                const bcr = document.getElementById('btn-cloud-rename'); if(bcr) bcr.classList.add('hidden');
+                
+                const oab = document.getElementById('os-action-btn-c');
+                if(oab) oab.innerText = (osMode === 'save') ? "새로 저장" : "불러오기";
+                
+                renderCloudListAction();
+            } else if(l.startsWith('export')) {
+                if(viewCloud) viewCloud.classList.add('hidden');
+                if(viewExport) viewExport.classList.remove('hidden');
+                selectExportOptionAction(l.replace('export-', ''));
+            }
+        }
+
+        function selectExportOptionAction(mode) {
+            osExpMode = mode;
+            const zipOptions = document.getElementById('export-zip-options');
+            if(zipOptions) {
+                if(mode === 'multi') zipOptions.classList.remove('hidden');
+                else zipOptions.classList.add('hidden');
+            }
+            
+            const fileInputName = document.getElementById('os-file-name-e');
+            const fileInputExt = document.getElementById('os-file-ext-e');
+            
+            if(fileInputName) fileInputName.value = activeProj().name;
+            if(fileInputExt) {
+                fileInputExt.disabled = false;
+                if(mode === 'json') fileInputExt.value = 'json';
+                else if(mode === 'image' || mode === 'img') fileInputExt.value = 'png';
+                else if(mode === 'doc') fileInputExt.value = 'pdf';
+                else if(mode === 'multi') { fileInputExt.value = 'zip'; fileInputExt.disabled = true; }
+            }
+            
+            const btn = document.getElementById('os-action-btn-e');
+            if(btn) btn.innerText = (mode === 'multi') ? "다중 압축 다운로드" : "내보내기 실행";
+            
+            const expTitle = document.getElementById('export-title'), expDesc = document.getElementById('export-desc'), expIcon = document.getElementById('export-icon');
+            if(expTitle && expDesc && expIcon) {
+                if(mode === 'json') { expTitle.innerText = "데이터 백업"; expDesc.innerText = "편집 가능한 원본 JSON 저장"; expIcon.innerText = "💾"; }
+                else if(mode === 'image' || mode === 'img') { expTitle.innerText = "이미지 추출"; expDesc.innerText = "고화질 이미지 내보내기"; expIcon.innerText = "🖼️"; }
+                else if(mode === 'multi') { expTitle.innerText = "다중 탭 선택 압축 (ZIP)"; expDesc.innerText = "열려있는 모든 프로젝트를 한 번에 압축(ZIP)하여 저장합니다."; expIcon.innerText = "📚"; renderMultiExportListAction(); }
+                else if(mode === 'doc') { expTitle.innerText = "문서 다운로드"; expDesc.innerText = "PDF 또는 HTML 형식으로 추출합니다."; expIcon.innerText = "📄"; }
+            }
+        }
+
+        function renderMultiExportListAction() {
+            const list = document.getElementById('multi-export-list');
+            if(!list) return;
+            list.innerHTML = '';
+            projects.forEach(p => {
+                const dv = document.createElement('div');
+                dv.className = "flex justify-between bg-black/40 p-2 rounded text-xs text-white items-center mb-1";
+                dv.innerHTML = `<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="multi-chk accent-indigo-500 w-3 h-3" value="${p.id}" checked><span>${p.name}</span></label><select class="multi-ext-sel bg-[#1e1e24] border border-[#444] rounded p-1 outline-none text-brand-primary font-bold"><option value="png">PNG</option><option value="jpg">JPG</option><option value="pdf">PDF</option><option value="json">JSON</option></select>`;
+                list.appendChild(dv);
+            });
+        }
+
+        function executeOSStorageAction() {
+            if (osLoc === 'cloud') {
+                if(osMode === 'save') exeCloudSaveAction();
+                else exeCloudLoadAction();
+            } else if (osLoc.startsWith('export')) {
+                const nameInput = document.getElementById('os-file-name-e');
+                const extInput = document.getElementById('os-file-ext-e');
+                const name = nameInput ? nameInput.value.trim() || 'Untitled' : 'Untitled';
+                let ext = extInput ? extInput.value.trim().toLowerCase() || 'png' : 'png';
+                
+                if(!allowedExts.includes(ext) && osExpMode !== 'multi' && ext !== 'zip') {
+                    return showAuthAlert("확장자 제한", `시스템에서 허용하지 않은 확장자입니다. (${ext})`);
+                }
+                
+                if (osExpMode === 'json' || ext === 'json') {
+                    exeLocalSaveAction(name, 'json');
+                } else if (osExpMode === 'multi') {
+                    exportMultipleTabsZipAction(name);
+                } else if (osExpMode === 'doc' || ['pdf', 'html'].includes(ext)) {
+                    if(!['pdf', 'html'].includes(ext)) return showAuthAlert("오류", "문서 내보내기는 .pdf, .html만 지원합니다.");
+                    exportCanvasDocAction(name, ext);
+                } else {
+                    if(!['png','jpg','jpeg','webp'].includes(ext)) return showAuthAlert("오류", "지원하는 이미지 확장자가 아닙니다.");
+                    exportCanvasImageAction(name, ext);
+                }
+            }
+        }
+
+        async function renderCloudListAction() {
+            const grid = document.getElementById('os-file-grid');
+            if(!grid) return;
+            grid.innerHTML = "<div class='col-span-full text-center py-10 text-slate-500'>DB 스캔 중...</div>";
+            try {
+                const snap = await db.ref('lago_pro_projects/' + selLoginName).once('value');
+                const d = snap.val();
+                grid.innerHTML = "";
+                if(d) {
+                    Object.keys(d).sort((a,b)=>d[b].ts-d[a].ts).forEach(k => {
+                        const item = document.createElement('div');
+                        item.className = "os-file-item";
+                        item.onclick = () => {
+                            document.querySelectorAll('.os-file-item').forEach(e=>e.classList.remove('selected'));
+                            item.classList.add('selected');
+                            osSelId = k;
+                            const fileInput = document.getElementById('os-file-name-c');
+                            if(fileInput) fileInput.value = d[k].name;
+                            
+                            if(osMode === 'save') {
+                                const overBtn = document.getElementById('btn-cloud-overwrite');
+                                if(overBtn) overBtn.classList.remove('hidden');
+                                const renBtn = document.getElementById('btn-cloud-rename');
+                                if(renBtn) renBtn.classList.remove('hidden');
+                            }
+                        };
+                        const ext = d[k].ext || 'FILE';
+                        let col = '#8b5cf6';
+                        if(['png','jpg','jpeg','webp'].includes(ext)) col = '#ec4899';
+                        if(ext === 'json') col = '#10b981';
+                        
+                        item.innerHTML = `
+                            <div class="os-file-icon" style="color:${col};border-color:${col}50">${ext.toUpperCase()}</div>
+                            <div class="os-file-name text-white">${d[k].name}</div>
+                            <div class="os-file-date text-slate-500 text-[9px] mt-1">${d[k].date||''}</div>
+                            <div class="flex gap-1 mt-2">
+                                <button onclick="downloadCloudToLocalAction(event, '${k}', '${d[k].name}')" class="text-[10px] text-blue-400 hover:text-blue-300 p-1 bg-blue-500/10 rounded">다운로드</button>
+                                <button onclick="deleteCloudProjectAction(event, '${k}', '${d[k].name}')" class="text-[10px] text-red-500 hover:text-red-400 p-1 bg-red-500/10 rounded">영구 삭제</button>
+                            </div>
+                        `;
+                        grid.appendChild(item);
+                    });
+                } else {
+                    grid.innerHTML = "<div class='col-span-full text-center py-10 text-slate-500'>저장된 파일이 없습니다.</div>";
+                }
+            } catch(e) {}
+        }
+
+        async function renameCloudProjectAction(e) {
+            if(e) e.stopPropagation();
+            if(!osSelId) return;
+            const input = document.getElementById('os-file-name-c');
+            let newName = prompt("새로운 프로젝트 이름을 입력하세요:", input ? input.value : "");
+            if(!newName) return;
+            newName = newName.replace(/[.#$\[\]]/g, "");
+            if(!newName.trim()) return showAuthAlert("오류", "유효하지 않은 이름입니다.");
+            
+            try {
+                await db.ref('lago_pro_projects/'+selLoginName+'/'+osSelId).update({ name: newName });
+                renderCloudListAction();
+            } catch(err) {}
+        }
+
+        async function deleteCloudProjectAction(e, id, name) {
+            e.stopPropagation();
+            showConfirmModal("클라우드 파일 삭제", `<strong class='text-white'>[${name}]</strong><br>파일을 영구 삭제하시겠습니까?<br>삭제 후에는 복구할 수 없습니다.`, async () => {
+                await db.ref('lago_pro_projects/' + selLoginName + '/' + id).remove();
+                renderCloudListAction();
+            });
+        }
+
+        async function downloadCloudToLocalAction(e, id, name) {
+            e.stopPropagation();
+            try {
+                const snap = await db.ref('lago_pro_projects/' + selLoginName + '/' + id).once('value');
+                const data = snap.val();
+                if(data) {
+                    const blob = new Blob([JSON.stringify({ app: "LAGO_PRO", bgC: data.bgC, shapes: data.shapes })], {type:'application/json'});
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `${data.name}.json`;
+                    a.click();
+                }
+            } catch(err) {}
+        }
+
+        async function exeCloudSaveAction() {
+            const input = document.getElementById('os-file-name-c');
+            if(!input) return;
+            let name = input.value.trim();
+            if(!name) return showAuthAlert("알림", "파일명 입력바랍니다.");
+            name = name.replace(/[#$\[\]]/g, "");
+            const ext = 'json';
+            
+            const ap = activeProj();
+            let sToSave = ap.shapes.map(s => { let c={...s}; if(c.type==='image'&&c.img) c.isrc=c.img.src; delete c.img; return c; });
+            const now = new Date();
+            const dStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()>=12?'오후':'오전'} ${now.getHours()%12||12}:${String(now.getMinutes()).padStart(2,'0')}`;
+            
+            try {
+                await db.ref('lago_pro_projects/'+selLoginName).push({ name, ext, bgC: ap.bgC, shapes: sToSave, date: dStr, ts: firebase.database.ServerValue.TIMESTAMP });
+                ap.name = name;
+                renderTabsAction();
+                closeModal('os-storage-modal');
+                showAuthAlert("저장 완료", `[${name}] 파일이 클라우드에 새로 보관되었습니다.`, false);
+            } catch(e) { showAuthAlert("오류", "저장 실패"); }
+        }
+
+        async function executeCloudOverwrite() {
+            if(!osSelId) return;
+            const input = document.getElementById('os-file-name-c');
+            if(!input) return;
+            let name = input.value.trim();
+            name = name.replace(/[#$\[\]]/g, "");
+            
+            const ap = activeProj();
+            let sToSave = ap.shapes.map(s => { let c={...s}; if(c.type==='image'&&c.img) c.isrc=c.img.src; delete c.img; return c; });
+            const now = new Date();
+            const dStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()>=12?'오후':'오전'} ${now.getHours()%12||12}:${String(now.getMinutes()).padStart(2,'0')}`;
+            
+            try {
+                await db.ref('lago_pro_projects/'+selLoginName+'/'+osSelId).update({ name, ext: 'json', bgC: ap.bgC, shapes: sToSave, date: dStr, ts: firebase.database.ServerValue.TIMESTAMP });
+                ap.name = name;
+                renderTabsAction();
+                closeModal('os-storage-modal');
+                showAuthAlert("업데이트 완료", `파일이 성공적으로 덮어쓰기 되었습니다.`, false);
+            } catch(e) {}
+        }
+
+        async function exeCloudLoadAction() {
+            if(!osSelId) return showAuthAlert("알림", "파일을 선택해주세요.");
+            try {
+                const snap = await db.ref('lago_pro_projects/'+selLoginName+'/'+osSelId).once('value');
+                const d = snap.val();
+                if(d){
+                    const newId = Date.now();
+                    let loadedShapes = [];
+                    let p = (d.shapes||[]).map(s=>{ return new Promise(r=>{ if(s.isrc){ let i=new Image(); i.onload=()=>{s.img=i; loadedShapes.push(s); r();}; i.onerror=()=>{loadedShapes.push(s);r();}; i.src=s.isrc; }else{loadedShapes.push(s); r();} }); });
+                    await Promise.all(p);
+                    projects.push({ id: newId, name: d.name, bgC: d.bgC, shapes: loadedShapes });
+                    activeProjId = newId;
+                    renderTabsAction();
+                    selectShapeAction(-1);
+                    drawCanvasAction();
+                    closeModal('os-storage-modal');
+                }
+            } catch(e) { showAuthAlert("오류", "불러오기 실패"); }
+        }
+
+        function exeLocalSaveAction(name, ext) {
+            const ap = activeProj();
+            const fn = `${name}.${ext}`;
+            const data = JSON.stringify({ app: "LAGO_PRO", bgC: ap.bgC, shapes: ap.shapes.map(s=>{let c={...s}; delete c.img; return c;}) });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([data], {type:'application/json'}));
+            a.download = fn;
+            a.click();
+            closeModal('os-storage-modal');
+        }
+
+        function handleCloudProjectUploadAction(e) {
+            const f = e.target.files[0];
+            if(!f) return;
+            const r = new FileReader();
+            r.onload = async ev => {
+                try {
+                    const d = JSON.parse(ev.target.result);
+                    if(d.app!=="LAGO_PRO") throw new Error();
+                    let sToSave = d.shapes || [];
+                    const now = new Date();
+                    const dStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()>=12?'오후':'오전'} ${now.getHours()%12||12}:${String(now.getMinutes()).padStart(2,'0')}`;
+                    await db.ref('lago_pro_projects/'+selLoginName).push({ name: f.name.replace('.json',''), ext: 'json', bgC: d.bgC||'#0f172a', shapes: sToSave, date: dStr, ts: firebase.database.ServerValue.TIMESTAMP });
+                    showAuthAlert("업로드 완료", `[${f.name}] 파일이 클라우드에 성공적으로 업로드되었습니다.`, false);
+                    renderCloudListAction();
+                } catch(err) { showAuthAlert("오류", "호환되지 않는 LAGO JSON 파일입니다.", true); }
+            };
+            r.readAsText(f);
+            e.target.value='';
+        }
+
+        function handleLocalProjectUploadAction(e) {
+            const f = e.target.files[0];
+            if(!f) return;
+            const r = new FileReader();
+            r.onload = async ev => {
+                try {
+                    const d = JSON.parse(ev.target.result);
+                    if(d.app!=="LAGO_PRO") throw new Error();
+                    const newId = Date.now();
+                    let loadedShapes = [];
+                    let p = d.shapes.map(s=>{ return new Promise(res=>{ if(s.isrc){ let i=new Image(); i.onload=()=>{s.img=i; loadedShapes.push(s); res();}; i.src=s.isrc; }else{loadedShapes.push(s); res();} }); });
+                    await Promise.all(p);
+                    projects.push({ id: newId, name: f.name.replace('.json',''), bgC: d.bgC, shapes: loadedShapes });
+                    activeProjId = newId;
+                    renderTabsAction();
+                    selectShapeAction(-1);
+                    drawCanvasAction();
+                } catch(err) { showAuthAlert("오류", "잘못된 형식의 파일입니다."); }
+            };
+            r.readAsText(f);
+            e.target.value='';
+        }
+
+        function exportCanvasImageAction(name, ext) {
+            const mime = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+            const canvas = document.getElementById('design-canvas');
+            if(canvas) {
+                const l=document.createElement('a');
+                l.download=`${name}.${ext}`;
+                l.href=canvas.toDataURL(mime, 0.9);
+                l.click();
+                closeModal('os-storage-modal');
+            }
+        }
+
+        function exportCanvasDocAction(name, ext) {
+            const canvas = document.getElementById('design-canvas');
+            if(!canvas) return;
+            const imgData = canvas.toDataURL('image/png');
+            
+            if(ext === 'html') {
+                const htmlContent = `<!DOCTYPE html><html><head><title>${name}</title></head><body style="margin:0; background:${activeProj().bgC}; display:flex; justify-content:center; align-items:center; height:100vh;"><img src="${imgData}" style="max-width:100%; max-height:100%;"></body></html>`;
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(new Blob([htmlContent], {type:'text/html'}));
+                a.download = `${name}.html`;
+                a.click();
+                closeModal('os-storage-modal');
+            } else if(ext === 'pdf') {
+                if(!window.jspdf) return showAuthAlert("오류", "PDF 라이브러리 로딩 중입니다.");
+                const pdf = new window.jspdf.jsPDF('l', 'px', [canvas.width, canvas.height]);
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                pdf.save(`${name}.pdf`);
+                closeModal('os-storage-modal');
+            }
+        }
+
+        async function exportMultipleTabsZipAction(zipName) {
+            if(projects.length === 0) return;
+            if(!window.JSZip) return showAuthAlert("오류", "ZIP 압축 라이브러리가 로드되지 않았습니다.");
+            
+            const pwd = document.getElementById('zip-pw') ? document.getElementById('zip-pw').value : "";
+            const is7z = document.getElementById('multi-ext-sel') && document.getElementById('multi-ext-sel').value !== 'zip';
+            if(pwd || is7z) return showAuthAlert("서버 제약", "보안 압축(AES-256) 및 7z 포맷은 클라우드 렌더링 서버가 필요합니다.<br>현재 브라우저에서는 <b>일반 ZIP 무압호화 다운로드</b>만 지원됩니다.", true);
+            
+            const qualityInput = document.getElementById('zip-quality');
+            const quality = qualityInput ? parseFloat(qualityInput.value) : 0.8;
+            
+            const chks = document.querySelectorAll('.multi-chk');
+            const sels = document.querySelectorAll('.multi-ext-sel');
+            let tgts = [];
+            chks.forEach((c,i)=>{ if(c.checked) tgts.push({id:parseInt(c.value), ext:sels[i].value}); });
+            if(tgts.length===0) return showAuthAlert("알림","선택된 탭이 없습니다.");
+            
+            closeModal('os-storage-modal');
+            showAuthAlert("압축 중", "고해상도 렌더링 및 압축 중...", false);
+            
+            const zip = new JSZip();
+            const canvas = document.getElementById('design-canvas');
+            const tempId = activeProjId;
+            
+            for(let t of tgts){
+                activeProjId = t.id;
+                renderTabsAction();
+                drawCanvasAction();
+                await new Promise(r=>setTimeout(r,300)); // 렌더링 대기
+                
+                const p = projects.find(x=>x.id===t.id);
+                if(t.ext==='json') {
+                    zip.file(`${p.name}.json`, JSON.stringify({app:"LAGO_PRO",bgC:p.bgC,shapes:p.shapes.map(s=>{let n={...s};delete n.img;return n;})}));
+                } else if(t.ext==='pdf') {
+                    if(window.jspdf){
+                        const pd = new window.jspdf.jsPDF('l','px',[canvas.width,canvas.height]);
+                        pd.addImage(canvas.toDataURL('image/png'),'PNG',0,0,canvas.width,canvas.height);
+                        zip.file(`${p.name}.pdf`, pd.output('blob'));
+                    }
+                } else {
+                    const d = canvas.toDataURL(`image/${t.ext==='jpg'?'jpeg':'png'}`, quality);
+                    zip.file(`${p.name}.${t.ext}`, d.split(',')[1], {base64:true});
+                }
+            }
+            
+            activeProjId = tempId;
+            renderTabsAction();
+            drawCanvasAction();
+            
+            try {
+                const blob = await zip.generateAsync({type:"blob"});
+                const sizeMB = (blob.size / (1024*1024)).toFixed(2);
+                const l = document.createElement('a');
+                l.href = URL.createObjectURL(blob);
+                l.download = `${zipName}.zip`;
+                l.click();
+                showAuthAlert("압축 완료", `모든 탭이 압축되었습니다. (용량: ${sizeMB} MB)`, false);
+            } catch(e) {
+                showAuthAlert("오류", "압축 실패");
+            }
+        }
+
+        function printCanvasDocument() {
+            const canvas = document.getElementById('design-canvas');
+            if(!canvas) return;
+            const imgData = canvas.toDataURL('image/png');
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`<html><head><title>LAGO PRO Print</title></head><body style="margin:0;text-align:center;"><img src="${imgData}" style="width:100%;" onload="window.print();window.close();"></body></html>`);
+            printWindow.document.close();
+            closeModal('os-storage-modal');
+        }
+
+        /* === 10. AI 이미지 검색/생성 === */
+        function openImageSearchModalAction() {
+            const modal = document.getElementById('image-search-modal');
+            if(modal) modal.classList.add('active');
+        }
+        
+        async function translateToEnglish(txt) {
+            if(!/[가-힣]/.test(txt)) return txt;
+            try {
+                const r = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(txt)}`);
+                const j = await r.json();
+                return j[0][0][0];
+            } catch(e) { return txt; }
+        }
+
+        async function executeImageSearchAction() {
+            const queryInput = document.getElementById('image-search-query');
+            if(!queryInput) return;
+            const q = queryInput.value.trim();
+            if(!q) return;
+            const grid = document.getElementById('image-results-grid');
+            if(!grid) return;
+            
+            grid.innerHTML = "<div class='col-span-full py-10 text-center text-emerald-400 font-bold'>AI가 이미지를 생성하고 있습니다...<br>약 5초 정도 소요됩니다.</div>";
+            
+            const eq = await translateToEnglish(q);
+            const safeQ = encodeURIComponent(eq);
+            const urls = [
+                `https://image.pollinations.ai/prompt/${safeQ}_photo?width=512&height=512&nologos=true&seed=${Math.random()}`,
+                `https://image.pollinations.ai/prompt/${safeQ}_illustration?width=512&height=512&nologos=true&seed=${Math.random()}`
+            ];
+            
+            let loadedCount = 0;
+            const checkDone = () => { if(loadedCount===urls.length && grid.innerHTML.includes("생성하고 있습니다")) grid.innerHTML=""; };
+            
+            urls.forEach(u => {
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.className = "rounded-xl cursor-pointer hover:opacity-80 transition border border-white/10 w-full object-cover aspect-square";
+                img.onload = () => {
+                    loadedCount++;
+                    checkDone();
+                    img.onclick = () => {
+                        addShapeToCanvas('image');
+                        const ap = activeProj();
+                        ap.shapes[ap.shapes.length-1].img = img;
+                        ap.shapes[ap.shapes.length-1].w = 256;
+                        ap.shapes[ap.shapes.length-1].h = 256;
+                        drawCanvasAction();
+                        closeModal('image-search-modal');
+                    };
+                    grid.appendChild(img);
+                };
+                img.onerror = () => { loadedCount++; checkDone(); };
+                img.src = u;
+            });
+        }
+
+        /* === 11. 2D 에디터 코어 로직 === */
+        let currentTool = 'select';
+        let isDragMode = false;
+        let isResizeMode = false;
+        let isDrawMode = false;
+        let dragOffset = {x:0, y:0};
+        let resizeAnchor = null;
+        let selIndex = -1;
+
+        function activeProj() {
+            return projects.find(p => p.id === activeProjId) || projects[0];
+        }
+
+        function renderTabsAction() {
+            const tc = document.getElementById('project-tabs');
+            if(!tc) return;
+            tc.innerHTML = '';
+            projects.forEach(p => {
+                const tab = document.createElement('div');
+                tab.className = `proj-tab ${p.id === activeProjId ? 'active' : ''}`;
+                tab.onclick = () => { activeProjId = p.id; renderTabsAction(); selectShapeAction(-1); drawCanvasAction(); };
+                tab.innerHTML = `<span>${p.name.length > 8 ? p.name.substring(0,8)+'...' : p.name}</span>`;
+                
+                if(projects.length > 1) {
+                    const clsBtn = document.createElement('span');
+                    clsBtn.className = 'close-tab font-bold text-red-500 hover:text-red-400';
+                    clsBtn.innerText = ' ✕';
+                    clsBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        showConfirmModal("탭 닫기", "저장하지 않은 내용은 사라집니다. 정말 닫으시겠습니까?", () => {
+                            projects = projects.filter(proj => proj.id !== p.id);
+                            if(activeProjId === p.id) activeProjId = projects[projects.length-1].id;
+                            renderTabsAction();
+                            selectShapeAction(-1);
+                            drawCanvasAction();
+                        });
+                    };
+                    tab.appendChild(clsBtn);
+                }
+                tc.appendChild(tab);
+            });
+            
+            const ap = activeProj();
+            const bgCInput = document.getElementById('canvas-bg-color');
+            if(bgCInput) bgCInput.value = ap.bgC;
+            const bgCHex = document.getElementById('canvas-bg-hex');
+            if(bgCHex) bgCHex.value = ap.bgC.toUpperCase();
+            const editorContainer = document.getElementById('editor-container');
+            if(editorContainer) editorContainer.style.backgroundColor = ap.bgC;
+        }
+
+        function createNewProjectTab() {
+            const newId = Date.now();
+            projects.push({ id: newId, name: `새_디자인_${projects.length+1}`, shapes: [], bgC: '#0f172a' });
+            activeProjId = newId;
+            renderTabsAction();
+            selectShapeAction(-1);
+            drawCanvasAction();
+        }
+
+        function clearCanvasConfirm() {
+            showConfirmModal("모두 지우기", "캔버스의 모든 요소가 영구 삭제됩니다. 진행하시겠습니까?", () => {
+                activeProj().shapes = [];
+                selectShapeAction(-1);
+                drawCanvasAction();
+            });
+        }
+
+        function resizeCanvasAction() {
+            const container = document.getElementById('editor-container');
+            const canvas = document.getElementById('design-canvas');
+            if(document.getElementById('lago-app').classList.contains('active') && container && canvas) {
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+                drawCanvasAction();
+            }
+        }
+
+        function initLagoAction() {
+            if(!activeProj().shapes.length) addShapeToCanvas('rect', '#8b5cf6');
+            renderTabsAction();
+            resizeCanvasAction();
+        }
+
+        function openEditor() {
+            isAnimating = false;
+            const editorUserLabel = document.getElementById('editor-username-label');
+            if(editorUserLabel) editorUserLabel.innerText = selLoginName;
+            
+            switchView('lago-app');
+            
+            const clockEl = document.getElementById('global-clock');
+            if(clockEl) {
+                clockEl.classList.add('in-editor');
+                clockEl.style.transform = 'none';
+                clockEl.style.top = 'auto';
+                clockEl.style.left = 'auto';
+                clockEl.style.bottom = '24px';
+                clockEl.style.right = '24px';
+            }
+            setTimeout(initLagoAction, 400);
+        }
+
+        function setToolAction(t) {
+            currentTool = t;
+            document.querySelectorAll('.tool-item').forEach(b => b.classList.toggle('active', b.id === 'tool-'+t));
+            const canvas = document.getElementById('design-canvas');
+            if(canvas) canvas.style.cursor = (t === 'text' ? 'text' : (t === 'line' || t === 'draw' ? 'crosshair' : 'default'));
+        }
+
+        function drawCanvasAction() {
+            const canvas = document.getElementById('design-canvas');
+            if(!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const ap = activeProj();
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = ap.bgC;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ap.shapes.forEach((s, i) => {
+                ctx.save();
+                
+                if(s.type !== 'line') {
+                    ctx.translate(s.x + s.w/2, s.y + s.h/2);
+                    ctx.rotate((s.rot || 0) * Math.PI / 180);
+                }
+                
+                ctx.globalAlpha = s.op;
+                ctx.fillStyle = ctx.strokeStyle = s.c;
+                ctx.lineWidth = s.sw || 3;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                
+                if(s.type === 'rect') ctx.rect(-s.w/2, -s.h/2, s.w, s.h);
+                else if(s.type === 'circle') ctx.arc(0, 0, s.w/2, 0, Math.PI*2);
+                else if(s.type === 'line') {
+                    ctx.moveTo(s.x1, s.y1);
+                    ctx.lineTo(s.x2, s.y2);
+                    ctx.stroke();
+                }
+                else if(s.type === 'draw' && s.pts && s.pts.length > 0) {
+                    ctx.moveTo(s.pts[0].x - (s.x + s.w/2), s.pts[0].y - (s.y + s.h/2));
+                    s.pts.forEach(p => ctx.lineTo(p.x - (s.x + s.w/2), p.y - (s.y + s.h/2)));
+                    ctx.stroke();
+                }
+                else if(s.type === 'text') {
+                    ctx.font = `${s.fs}px "${s.ff || 'Inter'}"`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(s.text, 0, 0);
+                }
+                else if(s.type === 'image' && s.img) ctx.drawImage(s.img, -s.w/2, -s.h/2, s.w, s.h);
+                else if(s.type === 'triangle') { ctx.moveTo(0, -s.h/2); ctx.lineTo(s.w/2, s.h/2); ctx.lineTo(-s.w/2, s.h/2); ctx.closePath(); }
+                else if(s.type === 'star') { let rot = Math.PI/2*3, step = Math.PI/5; ctx.moveTo(0, -s.w/2); for(let j=0; j<5; j++) { ctx.lineTo(Math.cos(rot)*s.w/2, Math.sin(rot)*s.w/2); rot += step; ctx.lineTo(Math.cos(rot)*s.w/4, Math.sin(rot)*s.w/4); rot += step; } ctx.closePath(); }
+                else if(s.type === 'hexagon') { for(let j=0; j<6; j++) ctx.lineTo(s.w/2 * Math.cos(j*2*Math.PI/6), s.w/2 * Math.sin(j*2*Math.PI/6)); ctx.closePath(); }
+                else if(s.type === 'diamond') { for(let j=0; j<4; j++) ctx.lineTo(s.w/2 * Math.cos(j*2*Math.PI/4), s.w/2 * Math.sin(j*2*Math.PI/4)); ctx.closePath(); }
+
+                if(s.type !== 'line' && s.type !== 'draw' && s.type !== 'text' && s.type !== 'image') ctx.fill();
+                if(s.sw > 0 && s.type !== 'line' && s.type !== 'draw') { ctx.strokeStyle = s.sc || s.c; ctx.stroke(); }
+                ctx.restore();
+
+                if (i === selIndex) {
+                    ctx.save();
+                    ctx.setLineDash([6, 4]);
+                    ctx.strokeStyle = '#22d3ee';
+                    ctx.lineWidth = 2;
+                    
+                    if(s.type === 'line') {
+                        ctx.setLineDash([]);
+                        ctx.fillStyle = '#fff';
+                        const as = 20; // 터치 핸들 크기 증가
+                        [
+                            [s.x1, s.y1],
+                            [s.x2, s.y2]
+                        ].forEach(p => {
+                            ctx.beginPath(); ctx.arc(p[0], p[1], as/2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                        });
+                    } else {
+                        ctx.translate(s.x + s.w/2, s.y + s.h/2);
+                        ctx.rotate((s.rot || 0) * Math.PI / 180);
+                        ctx.strokeRect(-s.w/2 - 5, -s.h/2 - 5, s.w + 10, s.h + 10);
+                        ctx.setLineDash([]);
+                        ctx.fillStyle = '#fff';
+                        const as = 16;
+                        [
+                            [-s.w/2 - 9, -s.h/2 - 9],
+                            [s.w/2 + 1, -s.h/2 - 9],
+                            [-s.w/2 - 9, s.h/2 + 1],
+                            [s.w/2 + 1, s.h/2 + 1]
+                        ].forEach(p => {
+                            ctx.beginPath(); ctx.arc(p[0] + as/2, p[1] + as/2, as/2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                        });
+                    }
+                    ctx.restore();
+                }
+            });
+            updateUIAction();
+        }
+
+        function addShapeToCanvas(t, c='#ec4899') {
+            const ap = activeProj();
+            ap.shapes.push({type: t, c: c, x: 100, y: 100, w: 150, h: 150, op: 1, rot: 0, fs: 40, text: t === 'text' ? 'LAGO Text' : '', ff: 'Inter', sw: 0});
+            selectShapeAction(ap.shapes.length - 1);
+            setToolAction('select');
+        }
+
+        function selectShapeAction(i) {
+            selIndex = i;
+            drawCanvasAction();
+            const pc = document.getElementById('panel-canvas');
+            const pe = document.getElementById('panel-element');
+            const bd = document.getElementById('btn-delete');
+            
+            if(!pc || !pe) return;
+            if (i === -1) {
+                pc.classList.remove('hidden'); pe.classList.add('hidden');
+                if(bd) bd.classList.add('hidden');
+            } else {
+                pc.classList.add('hidden'); pe.classList.remove('hidden');
+                if(bd) bd.classList.remove('hidden');
+                
+                const s = activeProj().shapes[i];
+                const scInput = document.getElementById('shape-color'); if(scInput) scInput.value = s.c;
+                const hexInput = document.getElementById('color-hex'); if(hexInput) hexInput.value = s.c.toUpperCase();
+                const opInput = document.getElementById('prop-opacity'); if(opInput) opInput.value = s.op;
+                const opVal = document.getElementById('opacity-val'); if(opVal) opVal.innerText = Math.round(s.op*100)+'%';
+                const rotInput = document.getElementById('prop-rotation'); if(rotInput) rotInput.value = s.rot || 0;
+                const rotVal = document.getElementById('rotation-val'); if(rotVal) rotVal.innerText = (s.rot||0)+'°';
+                
+                const isT = s.type === 'text';
+                const txtSec = document.getElementById('prop-section-text');
+                if(txtSec) txtSec.classList.toggle('hidden', !isT);
+                
+                if(isT) {
+                    const txtContent = document.getElementById('prop-text-content'); if(txtContent) txtContent.value = s.text;
+                    const fontSizeInput = document.getElementById('prop-font-size'); if(fontSizeInput) fontSizeInput.value = s.fs;
+                    const fontFamilySelect = document.getElementById('prop-font-family'); if(fontFamilySelect) fontFamilySelect.value = s.ff;
+                }
+            }
+        }
+
+        function deleteSelectedShape() {
+            if(selIndex !== -1) {
+                activeProj().shapes.splice(selIndex, 1);
+                selectShapeAction(-1);
+            }
+        }
+
+        function updateUIAction() {
+            const ap = activeProj();
+            const statusInd = document.getElementById('status-indicator');
+            if(statusInd && selIndex !== -1) {
+                let s = ap.shapes[selIndex];
+                statusInd.innerText = `POS: ${Math.round(s.x)}, ${Math.round(s.y)} | SIZE: ${Math.round(s.w)}x${Math.round(s.h)}`;
+            } else if(statusInd) {
+                statusInd.innerText = "LAGO PRO | READY";
+            }
+            
+            const ll = document.getElementById('layer-list');
+            if(!ll) return;
+            ll.innerHTML = '';
+            
+            const lc = document.getElementById('layer-count');
+            if(lc) lc.innerText = ap.shapes.length;
+            
+            [...ap.shapes].reverse().forEach((s, i) => {
+                const aIdx = ap.shapes.length - 1 - i;
+                const d = document.createElement('div');
+                d.className = `flex items-center justify-between px-4 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 ${aIdx === selIndex ? 'bg-violet-500/20 border-l-2 border-violet-500' : ''}`;
+                let typeName = s.type === 'image' ? '이미지' : s.type === 'text' ? '텍스트' : s.type === 'draw' ? '드로잉' : s.type === 'line' ? '선' : '도형';
+                d.innerHTML = `<div class="flex items-center gap-2"><div class="w-3 h-3 rounded-sm border border-white/20" style="background:${s.c}"></div><span class="text-[11px] font-bold text-slate-300 uppercase">${typeName}</span></div>`;
+                d.onclick = () => selectShapeAction(aIdx);
+                ll.appendChild(d);
+            });
+        }
+
+        function moveLayerAction(dir) {
+            if(selIndex === -1) return;
+            const ap = activeProj();
+            const to = dir === 'up' ? selIndex + 1 : selIndex - 1;
+            if(to >= 0 && to < ap.shapes.length) {
+                [ap.shapes[selIndex], ap.shapes[to]] = [ap.shapes[to], ap.shapes[selIndex]];
+                selectShapeAction(to);
+            }
+        }
+
+        function getMousePos(e) {
+            const canvas = document.getElementById('design-canvas');
+            if(!canvas) return {mx: 0, my: 0};
+            const r = canvas.getBoundingClientRect();
+            const c = e.touches && e.touches.length > 0 ? e.touches[0] : e;
+            return { mx: c.clientX - r.left, my: c.clientY - r.top };
+        }
+
+        function recognizeAIshape(pts) {
+            if(pts.length < 5) return { type: 'line', x1: pts[0].x, y1: pts[0].y, x2: pts[pts.length-1].x, y2: pts[pts.length-1].y };
+            
+            const p0 = pts[0], pN = pts[pts.length-1];
+            const minX = Math.min(...pts.map(p=>p.x)), maxX = Math.max(...pts.map(p=>p.x));
+            const minY = Math.min(...pts.map(p=>p.y)), maxY = Math.max(...pts.map(p=>p.y));
+            const w = Math.max(maxX - minX, 10), h = Math.max(maxY - minY, 10);
+            const cx = minX + w/2, cy = minY + h/2, diag = Math.hypot(w, h);
+
+            if(Math.hypot(p0.x - pN.x, p0.y - pN.y) > diag * 0.25) {
+                return { type: 'line', x1: p0.x, y1: p0.y, x2: pN.x, y2: pN.y };
+            }
+
+            let rAvg = 0; pts.forEach(p => rAvg += Math.hypot(p.x - cx, p.y - cy)); rAvg /= pts.length;
+            let rVar = 0; pts.forEach(p => rVar += Math.pow(Math.hypot(p.x - cx, p.y - cy) - rAvg, 2));
+            const rStd = Math.sqrt(rVar / pts.length);
+
+            if(rStd / rAvg < 0.2) return { type: 'circle', x: minX, y: minY, w: Math.max(w,h), h: Math.max(w,h) };
+            if(Math.abs(w - h) < diag * 0.2 && rStd/rAvg < 0.3) return { type: 'rect', x: minX, y: minY, w: w, h: h };
+            return { type: 'triangle', x: minX, y: minY, w: w, h: h };
+        }
+
+        function onCanvasPtrDown(e) {
+            const { mx, my } = getMousePos(e);
+            const ap = activeProj();
+            
+            if(currentTool === 'text') {
+                addShapeToCanvas('text');
+                ap.shapes[ap.shapes.length-1].x = mx - 75;
+                ap.shapes[ap.shapes.length-1].y = my - 25;
+                return;
+            }
+            if(currentTool === 'line' || currentTool === 'draw') {
+                const sc = document.getElementById('shape-color');
+                const sw = document.getElementById('prop-stroke-width');
+                ap.shapes.push({
+                    type: currentTool, c: sc ? sc.value : '#fff', sw: 3, 
+                    x1: mx, y1: my, x2: mx, y2: my, pts: [{x: mx, y: my}], 
+                    op: 1, rot: 0, x: mx, y: my, w: 10, h: 10
+                });
+                selIndex = ap.shapes.length - 1;
+                isDrawMode = true;
+                return;
+            }
+            
+            if(selIndex !== -1) {
+                const s = ap.shapes[selIndex];
+                if(s.type === 'line') {
+                    // 터치 핸들 반경 50
+                    if(Math.hypot(mx - s.x1, my - s.y1) < 50) { isResizeMode = true; resizeAnchor = 'line-start'; return; }
+                    if(Math.hypot(mx - s.x2, my - s.y2) < 50) { isResizeMode = true; resizeAnchor = 'line-end'; return; }
+                } else {
+                    const an = [
+                        ['tl', s.x - 10, s.y - 10], ['tr', s.x + s.w, s.y - 10],
+                        ['bl', s.x - 10, s.y + s.h], ['br', s.x + s.w, s.y + s.h]
+                    ];
+                    for(let [k, ax, ay] of an) {
+                        if(Math.hypot(mx - ax, my - ay) < 50) { isResizeMode = true; resizeAnchor = k; return; }
+                    }
+                }
+            }
+            
+            for(let i = ap.shapes.length - 1; i >= 0; i--) {
+                const s = ap.shapes[i];
+                if(s.type === 'line') {
+                    const minX = Math.min(s.x1, s.x2) - 15, maxX = Math.max(s.x1, s.x2) + 15;
+                    const minY = Math.min(s.y1, s.y2) - 15, maxY = Math.max(s.y1, s.y2) + 15;
+                    if(mx >= minX && mx <= maxX && my >= minY && my <= maxY) {
+                        selectShapeAction(i);
+                        isDragMode = true;
+                        dragOffset = { x: mx - s.x, y: my - s.y };
+                        return;
+                    }
+                } else {
+                    if(mx >= s.x && mx <= s.x + s.w && my >= s.y && my <= s.y + s.h) {
+                        selectShapeAction(i);
+                        isDragMode = true;
+                        dragOffset = { x: mx - s.x, y: my - s.y };
+                        return;
+                    }
+                }
+            }
+            selectShapeAction(-1);
+        }
+
+        function onCanvasPtrMove(e) {
+            if(selIndex === -1 || (!isDragMode && !isResizeMode && !isDrawMode)) return;
+            if(e.type === 'touchmove' && e.cancelable) e.preventDefault();
+            
+            const { mx, my } = getMousePos(e);
+            const ap = activeProj();
+            const s = ap.shapes[selIndex];
+            
+            if(isDrawMode) {
+                if(s.type === 'line') {
+                    s.x2 = mx; s.y2 = my;
+                } else {
+                    s.pts.push({x: mx, y: my});
+                }
+                drawCanvasAction();
+                return;
+            }
+            
+            if(isResizeMode) {
+                if(s.type === 'line') {
+                    if(resizeAnchor === 'line-start') { s.x1 = mx; s.y1 = my; }
+                    else if(resizeAnchor === 'line-end') { s.x2 = mx; s.y2 = my; }
+                } else {
+                    if(resizeAnchor === 'br') { s.w = Math.max(10, mx - s.x); s.h = Math.max(10, my - s.y); }
+                    else if(resizeAnchor === 'tl') {
+                        const ow = s.x + s.w, oh = s.y + s.h;
+                        s.x = Math.min(mx, ow - 10); s.y = Math.min(my, oh - 10);
+                        s.w = ow - s.x; s.h = oh - s.y;
+                    }
+                }
+                drawCanvasAction();
+            } else if(isDragMode) {
+                const canvas = document.getElementById('design-canvas');
+                let nx = mx - dragOffset.x;
+                let ny = dragOffset.y ? my - dragOffset.y : my - s.y;
+                let dx = nx - s.x, dy = ny - s.y;
+                
+                const guideX = document.getElementById('guide-x');
+                const guideY = document.getElementById('guide-y');
+                if(guideX) guideX.style.display = 'none';
+                if(guideY) guideY.style.display = 'none';
+                
+                if(Math.abs(nx + s.w/2 - canvas.width/2) < 5) {
+                    nx = canvas.width/2 - s.w/2; dx = nx - s.x;
+                    if(guideX) { guideX.style.display = 'block'; guideX.style.left = canvas.width/2 + 'px'; }
+                }
+                if(Math.abs(ny + s.h/2 - canvas.height/2) < 5) {
+                    ny = canvas.height/2 - s.h/2; dy = ny - s.y;
+                    if(guideY) { guideY.style.display = 'block'; guideY.style.top = canvas.height/2 + 'px'; }
+                }
+                
+                s.x = nx; s.y = ny;
+                if(s.type === 'line') {
+                    s.x1 += dx; s.x2 += dx; s.y1 += dy; s.y2 += dy;
+                } else if(s.type === 'draw') {
+                    s.pts.forEach(p => { p.x += dx; p.y += dy; });
+                }
+                drawCanvasAction();
+            }
+        }
+
+        function onCanvasPtrUp() {
+            if(selIndex !== -1 && isDrawMode) {
+                const ap = activeProj();
+                const s = ap.shapes[selIndex];
+                const keepRaw = document.getElementById('keep-raw-draw');
+                
+                if(s.type === 'draw' && keepRaw && !keepRaw.checked && s.pts && s.pts.length > 2) {
+                    const rec = recognizeAIshape(s.pts);
+                    s.type = rec.type;
+                    if(rec.type === 'line') {
+                        s.x1 = rec.x1; s.y1 = rec.y1; s.x2 = rec.x2; s.y2 = rec.y2; 
+                    } else {
+                        s.x = rec.x; s.y = rec.y; s.w = rec.w; s.h = rec.h;
+                    }
+                    delete s.pts;
+                } else if(s.type === 'line') {
+                    s.x = Math.min(s.x1, s.x2); s.y = Math.min(s.y1, s.y2);
+                    s.w = Math.max(Math.abs(s.x1 - s.x2), 10); s.h = Math.max(Math.abs(s.y1 - s.y2), 10);
+                } else if(s.type === 'draw' && s.pts) {
+                    let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
+                    s.pts.forEach(p => {
+                        mnX = Math.min(mnX, p.x); mnY = Math.min(mnY, p.y);
+                        mxX = Math.max(mxX, p.x); mxY = Math.max(mxY, p.y);
+                    });
+                    s.x = mnX; s.y = mnY;
+                    s.w = Math.max(mxX - mnX, 10); s.h = Math.max(mxY - mnY, 10);
+                }
+                isDrawMode = false;
+                setToolAction('select');
+                drawCanvasAction();
+            } else if (selIndex !== -1 && isResizeMode) {
+                const s = activeProj().shapes[selIndex];
+                if(s.type === 'line'){
+                    s.x = Math.min(s.x1, s.x2); s.y = Math.min(s.y1, s.y2);
+                    s.w = Math.max(Math.abs(s.x1 - s.x2), 10); s.h = Math.max(Math.abs(s.y1 - s.y2), 10);
+                }
+            }
+            
+            isDragMode = false;
+            isResizeMode = false;
+            const guideX = document.getElementById('guide-x');
+            const guideY = document.getElementById('guide-y');
+            if(guideX) guideX.style.display = 'none';
+            if(guideY) guideY.style.display = 'none';
+        }
+
+        setTimeout(() => {
+            const canvas = document.getElementById('design-canvas');
+            if(canvas) {
+                canvas.onmousedown = onCanvasPtrDown;
+                canvas.addEventListener('touchstart', onCanvasPtrDown, { passive: false });
+            }
+        }, 500);
+
+        window.addEventListener('mousemove', onCanvasPtrMove, {passive: false});
+        window.addEventListener('touchmove', onCanvasPtrMove, {passive: false});
+        window.addEventListener('mouseup', onCanvasPtrUp);
+        window.addEventListener('touchend', onCanvasPtrUp);
+
+        window.addEventListener('keydown', e => {
+            if((e.key === 'Delete' || e.key === 'Backspace') && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                deleteSelectedShape();
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            if(isAnimating) initBg();
+            resizeCanvasAction();
+        });
+
+        function setShapeProperty(k, v) {
+            if(selIndex !== -1) {
+                activeProj().shapes[selIndex][k] = v;
+                drawCanvasAction();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvasBgColorInput = document.getElementById('canvas-bg-color');
+            if(canvasBgColorInput) canvasBgColorInput.oninput = e => {
+                activeProj().bgC = e.target.value;
+                const hex = document.getElementById('canvas-bg-hex');
+                if(hex) hex.value = activeProj().bgC.toUpperCase();
+                const c = document.getElementById('editor-container');
+                if(c) c.style.backgroundColor = activeProj().bgC;
+                drawCanvasAction();
+            };
+
+            const shapeColor = document.getElementById('shape-color');
+            if(shapeColor) shapeColor.oninput = e => {
+                const hex = document.getElementById('color-hex');
+                if(hex) hex.value = e.target.value.toUpperCase();
+                setShapeProperty('c', e.target.value);
+            };
+
+            const propOpacity = document.getElementById('prop-opacity');
+            if(propOpacity) propOpacity.oninput = e => {
+                const opVal = document.getElementById('opacity-val');
+                if(opVal) opVal.innerText = Math.round(e.target.value * 100) + '%';
+                setShapeProperty('op', parseFloat(e.target.value));
+            };
+
+            const propRot = document.getElementById('prop-rotation');
+            if(propRot) propRot.oninput = e => {
+                const rv = document.getElementById('rotation-val');
+                if(rv) rv.innerText = e.target.value + '°';
+                setShapeProperty('rot', parseInt(e.target.value));
+            };
+
+            const propText = document.getElementById('prop-text-content');
+            if(propText) propText.oninput = e => setShapeProperty('text', e.target.value);
+
+            const propFs = document.getElementById('prop-font-size');
+            if(propFs) propFs.oninput = e => setShapeProperty('fs', parseInt(e.target.value) || 20);
+
+            const propFf = document.getElementById('prop-font-family');
+            if(propFf) propFf.onchange = e => setShapeProperty('ff', e.target.value);
+
+            const imgUpload = document.getElementById('img-upload');
+            if(imgUpload) {
+                imgUpload.onchange = e => {
+                    const f = e.target.files[0];
+                    if(!f) return;
+                    const r = new FileReader();
+                    r.onload = ev => {
+                        const i = new Image();
+                        i.onload = () => {
+                            addShapeToCanvas('image');
+                            const ap = activeProj();
+                            ap.shapes[ap.shapes.length-1].img = i;
+                            ap.shapes[ap.shapes.length-1].w = i.width > 300 ? 300 : i.width;
+                            ap.shapes[ap.shapes.length-1].h = i.width > 300 ? (i.height * (300/i.width)) : i.height;
+                            drawCanvasAction();
+                        };
+                        i.src = ev.target.result;
+                    };
+                    r.readAsDataURL(f);
+                    e.target.value = '';
+                };
+            }
+        });
+
+        // 윈도우 전역으로 연결
+        window.setTool = setToolAction;
+        window.deleteSelected = deleteSelectedShape;
+        window.moveLayer = moveLayerAction;
+        window.executeImageSearch = executeImageSearchAction;
+    </script>
+</body>
+</html>
